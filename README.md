@@ -74,6 +74,21 @@ node dist/index.js
 
 The package is configured with a `nhl-tui` bin entry for future npm publishing.
 
+## Releases
+
+GitHub Releases are automated with Actions on semantic-version tags. Pushing a tag such as `v0.1.0` runs typecheck and build, then creates a GitHub Release with generated notes.
+
+Example:
+
+```bash
+git checkout main
+git pull
+git tag v0.1.0
+git push origin main --tags
+```
+
+Version selection is still manual. The workflow only builds and publishes the GitHub Release after the tag exists.
+
 ## Controls
 
 ### Scoreboard
