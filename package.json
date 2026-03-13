@@ -1,0 +1,28 @@
+{
+  "name": "nhl-tui",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "nhl-tui": "./dist/index.js"
+  },
+  "scripts": {
+    "start": "node --import tsx src/index.tsx",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "ink": "^6.8.0",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.1",
+    "@types/react": "^19.2.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}
