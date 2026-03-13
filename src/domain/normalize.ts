@@ -1,15 +1,22 @@
 import type {
   BoxScore,
+  ConferenceStandings,
   DetailTab,
   GameClock,
   GameSummary,
   GoalieStatLine,
+  LeaderEntry,
+  LeaderTable,
+  LeaderTableKey,
   NormalizedGame,
   NormalizedGameDetail,
+  NormalizedLeaders,
   NormalizedPlay,
+  NormalizedStandings,
   NormalizedTeam,
   PlayByPlay,
   SkaterStatLine,
+  StandingsEntry,
   SummaryGoal,
   SummaryPenalty,
   TeamBoxScore,
@@ -681,6 +688,243 @@ function normalizeBoxScore(rawPayload: RawRecord): BoxScore {
       playerByGameStats.homeTeam as RawRecord | undefined,
       "home",
     ),
+  };
+}
+
+const DIVISION_NAME_BY_ABBREV: Record<string, string> = {
+  A: "Atlantic",
+  M: "Metropolitan",
+  C: "Central",
+  P: "Pacific",
+};
+
+const CONFERENCE_NAME_BY_ABBREV: Record<string, string> = {
+  E: "Eastern",
+  W: "Western",
+};
+
+function fallbackDivisionName(divisionAbbrev: string): string {
+  return DIVISION_NAME_BY_ABBREV[divisionAbbrev] ?? divisionAbbrev;
+}
+
+function fallbackConferenceName(conferenceAbbrev: string): string {
+  return CONFERENCE_NAME_BY_ABBREV[conferenceAbbrev] ?? conferenceAbbrev;
+}
+
+function normalizeStandingsEntry(rawStanding: RawRecord): StandingsEntry {
+  const conferenceAbbrev =
+    typeof rawStanding.conferenceAbbrev === "string"
+      ? rawStanding.conferenceAbbrev
+      : "";
+  const divisionAbbrev =
+    typeof rawStanding.divisionAbbrev === "string"
+      ? rawStanding.divisionAbbrev
+      : "";
+  const streakCode =
+    typeof rawStanding.streakCode === "string" ? rawStanding.streakCode : "";
+  const streakCount = toNumber(rawStanding.streakCount);
+
+  return {
+    teamAbbrev: readName(rawStanding.teamAbbrev) || "---",
+    teamName:
+      readName(rawStanding.teamCommonName) || readName(rawStanding.teamName),
+    conferenceAbbrev,
+    conferenceName:
+      readName(rawStanding.conferenceName) ||
+      fallbackConferenceName(conferenceAbbrev),
+    divisionAbbrev,
+    divisionName:
+      readName(rawStanding.divisionName) || fallbackDivisionName(divisionAbbrev),
+    divisionRank: toNumber(rawStanding.divisionSequence),
+    conferenceRank: toNumber(rawStanding.conferenceSequence),
+    wildcardRank: toNumber(rawStanding.wildcardSequence),
+    leagueRank: toNumber(rawStanding.leagueSequence),
+    points: toNumber(rawStanding.points),
+    gamesPlayed: toNumber(rawStanding.gamesPlayed),
+    wins: toNumber(rawStanding.wins),
+    losses: toNumber(rawStanding.losses),
+    otLosses: toNumber(rawStanding.otLosses),
+    row: toNumber(rawStanding.regulationPlusOtWins),
+    streak: streakCode && streakCount ? streakCode + String(streakCount) : "-",
+    clinchIndicator:
+      typeof rawStanding.clinchIndicator === "string" &&
+      rawStanding.clinchIndicator.trim()
+        ? rawStanding.clinchIndicator
+        : undefined,
+  };
+}
+
+function buildConferenceStandings(
+  entries: StandingsEntry[],
+  conferenceAbbrev: string,
+): ConferenceStandings {
+  const conferenceEntries = entries.filter(
+    (entry) => entry.conferenceAbbrev === conferenceAbbrev,
+  );
+  const divisionOrder = conferenceAbbrev === "E" ? ["A", "M"] : ["C", "P"];
+  const sections = [];
+
+  for (const divisionAbbrev of divisionOrder) {
+    const divisionEntries = conferenceEntries
+      .filter(
+        (entry) =>
+          entry.divisionAbbrev === divisionAbbrev &&
+          entry.divisionRank > 0 &&
+          entry.divisionRank <= 3,
+      )
+      .sort((left, right) => {
+        return (
+          left.divisionRank - right.divisionRank ||
+          right.points - left.points ||
+          left.teamAbbrev.localeCompare(right.teamAbbrev)
+        );
+      });
+
+    sections.push({
+      title: (divisionEntries[0]?.divisionName || fallbackDivisionName(divisionAbbrev)).toUpperCase(),
+      entries: divisionEntries,
+    });
+  }
+
+  sections.push({
+    title: "WILD CARD",
+    entries: conferenceEntries
+      .filter((entry) => entry.wildcardRank > 0 && entry.wildcardRank <= 2)
+      .sort((left, right) => {
+        return (
+          left.wildcardRank - right.wildcardRank ||
+          right.points - left.points ||
+          left.teamAbbrev.localeCompare(right.teamAbbrev)
+        );
+      }),
+  });
+
+  sections.push({
+    title: "UNDER WILD CARD",
+    entries: conferenceEntries
+      .filter((entry) => entry.wildcardRank > 2)
+      .sort((left, right) => {
+        return (
+          left.wildcardRank - right.wildcardRank ||
+          right.points - left.points ||
+          left.teamAbbrev.localeCompare(right.teamAbbrev)
+        );
+      }),
+  });
+
+  return {
+    conferenceAbbrev,
+    conferenceName:
+      conferenceEntries[0]?.conferenceName ||
+      fallbackConferenceName(conferenceAbbrev),
+    sections,
+  };
+}
+
+export function normalizeStandings(
+  rawPayload: unknown,
+  scoreboardDate: string,
+  now = Date.now(),
+): NormalizedStandings {
+  const payload = rawPayload as RawRecord;
+  const standings = Array.isArray(payload.standings) ? payload.standings : [];
+  const entries = standings.map((standing) =>
+    normalizeStandingsEntry(standing as RawRecord),
+  );
+
+  return {
+    date: scoreboardDate,
+    conferences: ["E", "W"].map((conferenceAbbrev) =>
+      buildConferenceStandings(entries, conferenceAbbrev),
+    ),
+    lastUpdatedAt: now,
+  };
+}
+
+const SKATER_LEADER_META = [
+  { key: "points", title: "Points", valueLabel: "PTS", digits: 0 },
+  { key: "goals", title: "Goals", valueLabel: "G", digits: 0 },
+  { key: "assists", title: "Assists", valueLabel: "A", digits: 0 },
+] as const;
+
+const GOALIE_LEADER_META = [
+  {
+    key: "goalsAgainstAverage",
+    title: "Goals Against Average",
+    valueLabel: "GAA",
+    digits: 2,
+  },
+  { key: "savePctg", title: "Save Percentage", valueLabel: "SV%", digits: 3 },
+  { key: "shutouts", title: "Shutouts", valueLabel: "SO", digits: 0 },
+] as const;
+
+function formatLeaderValue(value: number, digits: number): string {
+  return digits === 0 ? String(value) : value.toFixed(digits);
+}
+
+function normalizeLeaderEntry(
+  rawLeader: RawRecord,
+  rank: number,
+  digits: number,
+): LeaderEntry {
+  const value = toNumber(rawLeader.value);
+
+  return {
+    rank,
+    playerId: toNumber(rawLeader.id),
+    player: formatPlayerLabel(
+      shortName(rawLeader.firstName, rawLeader.lastName),
+      rawLeader.sweaterNumber,
+    ),
+    teamAbbrev:
+      typeof rawLeader.teamAbbrev === "string"
+        ? rawLeader.teamAbbrev
+        : readName(rawLeader.teamAbbrev) || "---",
+    position: typeof rawLeader.position === "string" ? rawLeader.position : "",
+    value,
+    displayValue: formatLeaderValue(value, digits),
+  };
+}
+
+function normalizeLeaderTable(
+  rawPayload: RawRecord,
+  meta: {
+    key: LeaderTableKey;
+    title: string;
+    valueLabel: string;
+    digits: number;
+  },
+): LeaderTable {
+  const entries = (Array.isArray(rawPayload[meta.key]) ? rawPayload[meta.key] : []) as RawRecord[];
+
+  return {
+    key: meta.key,
+    title: meta.title,
+    valueLabel: meta.valueLabel,
+    entries: entries
+      .slice(0, 10)
+      .map((entry: RawRecord, index: number) =>
+        normalizeLeaderEntry(entry, index + 1, meta.digits),
+      ),
+  };
+}
+
+export function normalizeLeaders(
+  rawSkaterPayload: unknown,
+  rawGoaliePayload: unknown,
+  now = Date.now(),
+): NormalizedLeaders {
+  const skaterPayload = rawSkaterPayload as RawRecord;
+  const goaliePayload = rawGoaliePayload as RawRecord;
+
+  return {
+    skaterTables: SKATER_LEADER_META.map((meta) =>
+      normalizeLeaderTable(skaterPayload, meta),
+    ),
+    goalieTables: GOALIE_LEADER_META.map((meta) =>
+      normalizeLeaderTable(goaliePayload, meta),
+    ),
+    lastUpdatedAt: now,
   };
 }
 

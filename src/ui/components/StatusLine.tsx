@@ -5,6 +5,7 @@ type StatusLineProps = {
   updatedAt?: number;
   pollDelayMs?: number;
   errorMessage?: string;
+  hideAutoWhenDisabled?: boolean;
 };
 
 const MIN_STALE_MS = 10_000;
@@ -14,6 +15,7 @@ export function StatusLine({
   updatedAt,
   pollDelayMs,
   errorMessage,
+  hideAutoWhenDisabled = false,
 }: StatusLineProps) {
   const [now, setNow] = useState(() => Date.now());
   const staleAfterMs =
@@ -59,14 +61,21 @@ export function StatusLine({
   const ageMs = updatedAt ? now - updatedAt : 0;
   const isStale =
     Boolean(updatedAt) && staleAfterMs !== undefined && ageMs >= staleAfterMs;
+  const showAuto = !(hideAutoWhenDisabled && pollDelayMs === undefined);
+
+  if (!showAuto && !errorMessage) {
+    return null;
+  }
 
   return (
     <Box>
-      <Text dimColor>
-        {pollDelayMs === undefined
-          ? "auto off"
-          : `auto ${Math.round(pollDelayMs / 1000)}s`}
-      </Text>
+      {showAuto && (
+        <Text dimColor>
+          {pollDelayMs === undefined
+            ? "auto off"
+            : `auto ${Math.round(pollDelayMs / 1000)}s`}
+        </Text>
+      )}
       {isStale && <Text color="yellow">{`  |  stale ${Math.floor(ageMs / 1000)}s`}</Text>}
       {errorMessage && <Text color="redBright">{`  |  error ${errorMessage}`}</Text>}
     </Box>
