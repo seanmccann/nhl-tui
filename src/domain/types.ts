@@ -7,6 +7,12 @@ export type AppScreen =
       type: "scoreboard";
     }
   | {
+      type: "standings";
+    }
+  | {
+      type: "leaders";
+    }
+  | {
       type: "game";
       gameId: number;
       tab: DetailTab;
@@ -166,6 +172,75 @@ export type BoxScore = {
   home: TeamBoxScore;
 };
 
+export type StandingsEntry = {
+  teamAbbrev: string;
+  teamName: string;
+  conferenceAbbrev: string;
+  conferenceName: string;
+  divisionAbbrev: string;
+  divisionName: string;
+  divisionRank: number;
+  conferenceRank: number;
+  wildcardRank: number;
+  leagueRank: number;
+  points: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  otLosses: number;
+  row: number;
+  streak: string;
+  clinchIndicator?: string;
+};
+
+export type StandingsSection = {
+  title: string;
+  entries: StandingsEntry[];
+};
+
+export type ConferenceStandings = {
+  conferenceAbbrev: string;
+  conferenceName: string;
+  sections: StandingsSection[];
+};
+
+export type NormalizedStandings = {
+  date: string;
+  conferences: ConferenceStandings[];
+  lastUpdatedAt: number;
+};
+
+export type LeaderTableKey =
+  | "points"
+  | "goals"
+  | "assists"
+  | "goalsAgainstAverage"
+  | "savePctg"
+  | "shutouts";
+
+export type LeaderEntry = {
+  rank: number;
+  playerId: number;
+  player: string;
+  teamAbbrev: string;
+  position: string;
+  value: number;
+  displayValue: string;
+};
+
+export type LeaderTable = {
+  key: LeaderTableKey;
+  title: string;
+  valueLabel: string;
+  entries: LeaderEntry[];
+};
+
+export type NormalizedLeaders = {
+  skaterTables: LeaderTable[];
+  goalieTables: LeaderTable[];
+  lastUpdatedAt: number;
+};
+
 export type NormalizedGameDetail = {
   game: NormalizedGame;
   summary?: GameSummary;
@@ -178,12 +253,18 @@ export type AppState = {
   screen: AppScreen;
   scoreboardDate: string;
   games: NormalizedGame[];
+  standingsByDate: Record<string, NormalizedStandings>;
+  standingsErrorByDate: Record<string, string | undefined>;
+  leaders?: NormalizedLeaders;
+  leadersErrorMessage?: string;
   gameDetails: Record<number, NormalizedGameDetail>;
+  gameDetailErrors: Record<number, string | undefined>;
+  scoreboardLoadedDate?: string;
+  scoreboardUpdatedAt?: number;
+  scoreboardErrorMessage?: string;
   selectedGameId?: number;
-  updatedAt?: number;
   bannerQueue: Banner[];
   activeBanner?: Banner;
   recentEvents: AppEvent[];
-  errorMessage?: string;
   manualRefreshToken: number;
 };

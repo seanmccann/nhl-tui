@@ -23,6 +23,22 @@ export class NhlApi {
     return requestJson(`/score/${scoreboardDate}`);
   }
 
+  async fetchStandings(scoreboardDate: string): Promise<unknown> {
+    return requestJson(`/standings/${scoreboardDate}`);
+  }
+
+  async fetchSkaterLeaders(limit = 10): Promise<unknown> {
+    return requestJson(
+      `/skater-stats-leaders/current?categories=points,goals,assists&limit=${limit}`,
+    );
+  }
+
+  async fetchGoalieLeaders(limit = 10): Promise<unknown> {
+    return requestJson(
+      `/goalie-stats-leaders/current?categories=goalsAgainstAverage,savePctg,shutouts&limit=${limit}`,
+    );
+  }
+
   async fetchSummary(gameId: number): Promise<unknown> {
     return requestJson(`/gamecenter/${gameId}/landing`);
   }

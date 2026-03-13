@@ -20,6 +20,13 @@ export function handleAppInput(
   dispatch: Dispatch<Action>,
   quit: () => void,
 ): void {
+  if (state.screen.type === "standings" || state.screen.type === "leaders") {
+    if (key.escape) {
+      dispatch({ type: "go_back" });
+      return;
+    }
+  }
+
   if (input === "q") {
     quit();
     return;
@@ -31,7 +38,9 @@ export function handleAppInput(
   }
 
   if (input === "r") {
-    dispatch({ type: "manual_refresh_requested" });
+    if (state.screen.type !== "standings" && state.screen.type !== "leaders") {
+      dispatch({ type: "manual_refresh_requested" });
+    }
     return;
   }
 
@@ -42,6 +51,16 @@ export function handleAppInput(
 
   if (input === "G") {
     dispatch({ type: "jump_selection", target: "bottom" });
+    return;
+  }
+
+  if (state.screen.type === "scoreboard" && input === "s") {
+    dispatch({ type: "open_standings" });
+    return;
+  }
+
+  if (state.screen.type === "scoreboard" && input === "l") {
+    dispatch({ type: "open_leaders" });
     return;
   }
 
@@ -57,12 +76,12 @@ export function handleAppInput(
     }
   }
 
-  if (key.upArrow) {
+  if (state.screen.type === "scoreboard" && key.upArrow) {
     dispatch({ type: "move_selection", delta: -1 });
     return;
   }
 
-  if (key.downArrow) {
+  if (state.screen.type === "scoreboard" && key.downArrow) {
     dispatch({ type: "move_selection", delta: 1 });
     return;
   }

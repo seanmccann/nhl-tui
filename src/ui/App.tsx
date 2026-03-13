@@ -8,6 +8,8 @@ import {
   useAppPolling,
 } from "../app/polling.js";
 import {
+  selectCurrentLeaders,
+  selectCurrentStandings,
   selectSelectedGame,
   selectVisibleGames,
   useAppStore,
@@ -18,7 +20,9 @@ import { Banner } from "./components/Banner.js";
 import { Footer } from "./components/Footer.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { GameDetailScreen } from "./screens/GameDetailScreen.js";
+import { LeadersScreen } from "./screens/LeadersScreen.js";
 import { ScoreboardScreen } from "./screens/ScoreboardScreen.js";
+import { StandingsScreen } from "./screens/StandingsScreen.js";
 
 type AppProps = {
   client: NhlApi;
@@ -56,7 +60,13 @@ export function App({ client }: AppProps) {
   const gameScreen = screen.type === "game" ? screen : undefined;
   const visibleGames = selectVisibleGames(state);
   const selectedGame = selectSelectedGame(state);
+  const standings = selectCurrentStandings(state);
+  const standingsErrorMessage = state.standingsErrorByDate[state.scoreboardDate];
+  const leaders = selectCurrentLeaders(state);
   const detail = gameScreen ? state.gameDetails[gameScreen.gameId] : undefined;
+  const detailErrorMessage = gameScreen
+    ? state.gameDetailErrors[gameScreen.gameId]
+    : undefined;
   let detailGame =
     detail?.game ??
     (gameScreen
@@ -66,12 +76,28 @@ export function App({ client }: AppProps) {
     state.games,
     state.scoreboardDate,
   );
+  let statusUpdatedAt = state.scoreboardUpdatedAt;
+  let screenErrorMessage = state.scoreboardErrorMessage;
+
+  if (screen.type === "standings") {
+    pollDelayMs = undefined;
+    statusUpdatedAt = standings?.lastUpdatedAt;
+    screenErrorMessage = standingsErrorMessage;
+  }
+
+  if (screen.type === "leaders") {
+    pollDelayMs = undefined;
+    statusUpdatedAt = leaders?.lastUpdatedAt;
+    screenErrorMessage = state.leadersErrorMessage;
+  }
 
   if (gameScreen) {
     detailGame =
       detail?.game ??
       state.games.find((game) => game.id === gameScreen.gameId);
     pollDelayMs = getDetailPollDelayMs(gameScreen.tab, detailGame);
+    statusUpdatedAt = detail?.lastUpdatedAt;
+    screenErrorMessage = detailErrorMessage;
   }
 
   return (
@@ -86,8 +112,24 @@ export function App({ client }: AppProps) {
             dateLabel={formatScoreboardDateLabel(state.scoreboardDate)}
             games={visibleGames}
             selectedGameId={state.selectedGameId}
-            loading={!state.updatedAt && !state.games.length && !state.errorMessage}
-            errorMessage={state.errorMessage}
+            loading={
+              state.scoreboardLoadedDate !== state.scoreboardDate &&
+              !state.scoreboardErrorMessage
+            }
+            errorMessage={state.scoreboardErrorMessage}
+          />
+        ) : screen.type === "standings" ? (
+          <StandingsScreen
+            dateLabel={formatScoreboardDateLabel(state.scoreboardDate)}
+            standings={standings}
+            loading={!standings && !standingsErrorMessage}
+            errorMessage={standingsErrorMessage}
+          />
+        ) : screen.type === "leaders" ? (
+          <LeadersScreen
+            leaders={leaders}
+            loading={!leaders && !state.leadersErrorMessage}
+            errorMessage={state.leadersErrorMessage}
           />
         ) : (
           <GameDetailScreen
@@ -98,11 +140,12 @@ export function App({ client }: AppProps) {
         )}
       </Box>
       <StatusLine
-        updatedAt={state.updatedAt}
+        updatedAt={statusUpdatedAt}
         pollDelayMs={pollDelayMs}
-        errorMessage={state.errorMessage}
+        errorMessage={screenErrorMessage}
+        hideAutoWhenDisabled={screen.type === "standings" || screen.type === "leaders"}
       />
-      <Footer mode={gameScreen ? "game" : "scoreboard"} />
+      <Footer mode={screen.type} />
     </Box>
   );
 }

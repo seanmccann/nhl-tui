@@ -4,7 +4,12 @@ import { NhlApi } from "../api/nhl.js";
 import { compareScoreboardDateToToday } from "./dates.js";
 import { diffGame, diffGames } from "../domain/diff.js";
 import { type Action } from "../domain/reducer.js";
-import { normalizeDetail, normalizeScoreboard } from "../domain/normalize.js";
+import {
+  normalizeDetail,
+  normalizeLeaders,
+  normalizeScoreboard,
+  normalizeStandings,
+} from "../domain/normalize.js";
 import type { AppState, DetailTab, NormalizedGame } from "../domain/types.js";
 
 type UseAppPollingOptions = {
@@ -93,7 +98,10 @@ export function getDetailPollDelayMs(
   }
 
   if (game.phase === "upcoming") {
-    return Math.min(getScoreboardPollDelayMs([game], game.startTimeUtc.slice(0, 10), now), tab === "pbp" ? 5000 : 8000);
+    return Math.min(
+      getScoreboardPollDelayMs([game], game.startTimeUtc.slice(0, 10), now),
+      tab === "pbp" ? 5000 : 8000,
+    );
   }
 
   return undefined;
@@ -118,18 +126,18 @@ export function useAppPolling({
   manualRefreshToken,
 }: UseAppPollingOptions): void {
   const fetchScoreboard = useEffectEvent(async () => {
-    const scoreboardDate = stateRef.current.scoreboardDate;
+    const currentScoreboardDate = stateRef.current.scoreboardDate;
 
     try {
       const receivedAt = Date.now();
-      const payload = await client.fetchScoreboard(scoreboardDate);
+      const payload = await client.fetchScoreboard(currentScoreboardDate);
       const games = normalizeScoreboard(payload);
       const previousGames = stateRef.current.games;
       const events = diffGames(previousGames, games, receivedAt);
 
       dispatch({
         type: "scoreboard_loaded",
-        scoreboardDate,
+        scoreboardDate: currentScoreboardDate,
         games,
         receivedAt,
         events,
@@ -137,9 +145,67 @@ export function useAppPolling({
     } catch (error) {
       dispatch({
         type: "poll_failed",
+        resource: "scoreboard",
         error: formatError(error),
-        scoreboardDate,
+        scoreboardDate: currentScoreboardDate,
       });
+    }
+  });
+
+  const fetchStandings = useEffectEvent(async () => {
+    const currentScoreboardDate = stateRef.current.scoreboardDate;
+
+    if (stateRef.current.standingsByDate[currentScoreboardDate]) {
+      return;
+    }
+
+    try {
+      const receivedAt = Date.now();
+      const payload = await client.fetchStandings(currentScoreboardDate);
+      const standings = normalizeStandings(payload, currentScoreboardDate, receivedAt);
+
+      dispatch({
+        type: "standings_loaded",
+        scoreboardDate: currentScoreboardDate,
+        standings,
+        receivedAt,
+      });
+    } catch (error) {
+      dispatch({
+        type: "poll_failed",
+        resource: "standings",
+        error: formatError(error),
+        scoreboardDate: currentScoreboardDate,
+      });
+    }
+  });
+
+  const fetchLeaders = useEffectEvent(async () => {
+    if (stateRef.current.leaders) {
+      return;
+    }
+
+    try {
+      const receivedAt = Date.now();
+      const [skaterPayload, goaliePayload] = await Promise.all([
+        client.fetchSkaterLeaders(10),
+        client.fetchGoalieLeaders(10),
+      ]);
+      const leaders = normalizeLeaders(skaterPayload, goaliePayload, receivedAt);
+
+      dispatch({
+        type: "leaders_loaded",
+        leaders,
+        receivedAt,
+      });
+    } catch (error) {
+      if (stateRef.current.screen.type === "leaders") {
+        dispatch({
+          type: "poll_failed",
+          resource: "leaders",
+          error: formatError(error),
+        });
+      }
     }
   });
 
@@ -186,6 +252,7 @@ export function useAppPolling({
     } catch (error) {
       dispatch({
         type: "poll_failed",
+        resource: "game",
         error: formatError(error),
         gameId: screen.gameId,
       });
@@ -195,6 +262,16 @@ export function useAppPolling({
   const fetchCurrentView = useEffectEvent(async () => {
     if (stateRef.current.screen.type === "scoreboard") {
       await fetchScoreboard();
+      return;
+    }
+
+    if (stateRef.current.screen.type === "standings") {
+      await fetchStandings();
+      return;
+    }
+
+    if (stateRef.current.screen.type === "leaders") {
+      await fetchLeaders();
       return;
     }
 
@@ -217,6 +294,10 @@ export function useAppPolling({
         state.scoreboardDate,
       );
       const screen = state.screen;
+
+      if (screen.type === "standings" || screen.type === "leaders") {
+        delay = undefined;
+      }
 
       if (screen.type === "game") {
         const currentGame =

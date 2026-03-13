@@ -14,6 +14,8 @@ Current capabilities:
 - stable row selection
 - game detail view with summary, play-by-play, and box score tabs
 - adaptive polling for scoreboard and game detail
+- standings screen with conference playoff-cut grouping
+- leaders screen with top-10 skater and goalie stat tables
 - diff-based domain events for goals, game starts, period changes, and finals
 - queued goal banners
 - reducer-based state management with separate API, domain, and UI layers
@@ -33,6 +35,19 @@ Game detail:
 - summary
 - play-by-play
 - box score
+
+Standings:
+
+- Eastern and Western conference sections
+- top three teams in each division
+- two conference wild card teams
+- teams below the wild card line
+
+Leaders:
+
+- skater leaders for points, goals, and assists
+- goalie leaders for goals against average, save percentage, and shutouts
+- top 10 rows per table
 
 The summary view includes scoring, penalties, and three stars. Where the upstream payload exposes enough information, player labels are rendered as sweater number plus short name, for example `97 C. McDavid`.
 
@@ -68,8 +83,18 @@ The package is configured with a `nhl-tui` bin entry for future npm publishing.
 - `g`: jump to top
 - `G`: jump to bottom
 - `enter`: open selected game
+- `s`: open standings
+- `l`: open leaders
 - `r`: manual refresh
 - `esc` or `q`: quit
+
+### Standings view
+
+- `esc`: back to scoreboard
+
+### Leaders view
+
+- `esc`: back to scoreboard
 
 ### Game view
 
@@ -107,13 +132,16 @@ Game data is retrieved from publicly accessible endpoints used by NHL web applic
 Current endpoint usage is isolated in `src/api/nhl.ts`:
 
 - `/v1/score/YYYY-MM-DD`
+- `/v1/standings/YYYY-MM-DD`
+- `/v1/skater-stats-leaders/current?categories=points,goals,assists&limit=10`
+- `/v1/goalie-stats-leaders/current?categories=goalsAgainstAverage,savePctg,shutouts&limit=10`
 - `/v1/gamecenter/{gameId}/landing`
 - `/v1/gamecenter/{gameId}/play-by-play`
 - `/v1/gamecenter/{gameId}/boxscore`
 
 No API key is currently required for these endpoints, but their availability and permitted use can change over time.
 
-The application uses adaptive polling to minimize load on upstream services. It limits requests to the current scoreboard date or the currently selected game, slows down aggressively when possible, and is intended for personal and educational use.
+The application uses adaptive polling to minimize load on upstream services. It limits requests to the current scoreboard date or the currently selected game, slows down aggressively when possible, and is intended for personal and educational use. The standings screen is fetched once per selected date and then served from in-memory state. The leaders screen is also fetched once and then served from in-memory state.
 
 ## Legal And Trademark Considerations
 

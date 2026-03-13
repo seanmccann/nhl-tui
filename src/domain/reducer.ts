@@ -8,6 +8,8 @@ import type {
   DetailTab,
   NormalizedGame,
   NormalizedGameDetail,
+  NormalizedLeaders,
+  NormalizedStandings,
 } from "./types.js";
 
 export type Action =
@@ -19,6 +21,17 @@ export type Action =
       events: AppEvent[];
     }
   | {
+      type: "standings_loaded";
+      scoreboardDate: string;
+      standings: NormalizedStandings;
+      receivedAt: number;
+    }
+  | {
+      type: "leaders_loaded";
+      leaders: NormalizedLeaders;
+      receivedAt: number;
+    }
+  | {
       type: "game_detail_loaded";
       gameId: number;
       detail: NormalizedGameDetail;
@@ -27,6 +40,7 @@ export type Action =
     }
   | {
       type: "poll_failed";
+      resource: "scoreboard" | "standings" | "leaders" | "game";
       error: string;
       scoreboardDate?: string;
       gameId?: number;
@@ -35,6 +49,8 @@ export type Action =
   | { type: "move_selection"; delta: -1 | 1 }
   | { type: "jump_selection"; target: "top" | "bottom" }
   | { type: "open_selected_game" }
+  | { type: "open_standings" }
+  | { type: "open_leaders" }
   | { type: "go_back" }
   | { type: "set_tab"; tab: DetailTab }
   | { type: "manual_refresh_requested" }
@@ -184,10 +200,47 @@ export function appReducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         games: action.games,
+        scoreboardLoadedDate: action.scoreboardDate,
+        scoreboardUpdatedAt: action.receivedAt,
+        scoreboardErrorMessage: undefined,
         selectedGameId: nextSelectedGameId,
-        updatedAt: action.receivedAt,
-        errorMessage: undefined,
         ...withEvents(state, action.games, action.events, action.receivedAt),
+      };
+    }
+
+    case "standings_loaded": {
+      if (action.scoreboardDate !== state.scoreboardDate) {
+        return state;
+      }
+
+      const nextStandingsByDate = {
+        ...state.standingsByDate,
+        [action.scoreboardDate]: action.standings,
+      };
+
+      const cacheKeys = Object.keys(nextStandingsByDate);
+      if (cacheKeys.length > 5) {
+        const oldest = cacheKeys.reduce((a, b) =>
+          nextStandingsByDate[a]!.lastUpdatedAt < nextStandingsByDate[b]!.lastUpdatedAt ? a : b,
+        );
+        delete nextStandingsByDate[oldest];
+      }
+
+      return {
+        ...state,
+        standingsByDate: nextStandingsByDate,
+        standingsErrorByDate: {
+          ...state.standingsErrorByDate,
+          [action.scoreboardDate]: undefined,
+        },
+      };
+    }
+
+    case "leaders_loaded": {
+      return {
+        ...state,
+        leaders: action.leaders,
+        leadersErrorMessage: undefined,
       };
     }
 
@@ -205,8 +258,10 @@ export function appReducer(state: AppState, action: Action): AppState {
           ...state.gameDetails,
           [action.gameId]: mergedDetail,
         },
-        updatedAt: action.receivedAt,
-        errorMessage: undefined,
+        gameDetailErrors: {
+          ...state.gameDetailErrors,
+          [action.gameId]: undefined,
+        },
         ...withEvents(state, nextGames, action.events, action.receivedAt),
       };
     }
@@ -223,9 +278,40 @@ export function appReducer(state: AppState, action: Action): AppState {
         return state;
       }
 
+      if (action.resource === "scoreboard") {
+        return {
+          ...state,
+          scoreboardErrorMessage: action.error,
+        };
+      }
+
+      if (action.resource === "standings") {
+        return {
+          ...state,
+          standingsErrorByDate: {
+            ...state.standingsErrorByDate,
+            [state.scoreboardDate]: action.error,
+          },
+        };
+      }
+
+      if (action.resource === "leaders") {
+        return {
+          ...state,
+          leadersErrorMessage: action.error,
+        };
+      }
+
+      if (!action.gameId) {
+        return state;
+      }
+
       return {
         ...state,
-        errorMessage: action.error,
+        gameDetailErrors: {
+          ...state.gameDetailErrors,
+          [action.gameId]: action.error,
+        },
       };
 
     case "change_scoreboard_date":
@@ -237,9 +323,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         ...state,
         scoreboardDate: shiftScoreboardDate(state.scoreboardDate, action.delta),
         games: [],
+        scoreboardLoadedDate: undefined,
+        scoreboardUpdatedAt: undefined,
+        scoreboardErrorMessage: undefined,
         selectedGameId: undefined,
-        updatedAt: undefined,
-        errorMessage: undefined,
         activeBanner: undefined,
         bannerQueue: [],
       };
@@ -251,7 +338,11 @@ export function appReducer(state: AppState, action: Action): AppState {
       return jumpSelection(state, action.target);
 
     case "open_selected_game":
-      if (!state.selectedGameId) {
+      if (
+        !isScoreboardScreen(state.screen) ||
+        !state.selectedGameId ||
+        !state.games.some((game) => game.id === state.selectedGameId)
+      ) {
         return state;
       }
 
@@ -264,14 +355,52 @@ export function appReducer(state: AppState, action: Action): AppState {
         },
       };
 
-    case "go_back":
+    case "open_standings":
       if (!isScoreboardScreen(state.screen)) {
+        return state;
+      }
+
+      return {
+        ...state,
+        screen: {
+          type: "standings",
+        },
+        standingsErrorByDate: {
+          ...state.standingsErrorByDate,
+          [state.scoreboardDate]: undefined,
+        },
+      };
+
+    case "open_leaders":
+      if (!isScoreboardScreen(state.screen)) {
+        return state;
+      }
+
+      return {
+        ...state,
+        screen: {
+          type: "leaders",
+        },
+        leadersErrorMessage: undefined,
+      };
+
+    case "go_back":
+      if (state.screen.type === "game") {
         return {
           ...state,
           screen: {
             type: "scoreboard",
           },
           selectedGameId: resolveSelection(state.games, state.screen.gameId),
+        };
+      }
+
+      if (state.screen.type === "standings" || state.screen.type === "leaders") {
+        return {
+          ...state,
+          screen: {
+            type: "scoreboard",
+          },
         };
       }
 
@@ -290,11 +419,31 @@ export function appReducer(state: AppState, action: Action): AppState {
         },
       };
 
-    case "manual_refresh_requested":
-      return {
+    case "manual_refresh_requested": {
+      const nextState: AppState = {
         ...state,
         manualRefreshToken: state.manualRefreshToken + 1,
       };
+
+      if (state.screen.type === "scoreboard") {
+        return {
+          ...nextState,
+          scoreboardErrorMessage: undefined,
+        };
+      }
+
+      if (state.screen.type === "game") {
+        return {
+          ...nextState,
+          gameDetailErrors: {
+            ...state.gameDetailErrors,
+            [state.screen.gameId]: undefined,
+          },
+        };
+      }
+
+      return nextState;
+    }
 
     case "dismiss_banner":
       return {
