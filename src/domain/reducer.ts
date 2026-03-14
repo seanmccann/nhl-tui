@@ -1,4 +1,4 @@
-import { shiftScoreboardDate } from "../app/dates.js";
+import { shiftScoreboardDate, todayScoreboardDate } from "../app/dates.js";
 import { createGoalBanners } from "./events.js";
 import type {
   AppEvent,
@@ -45,6 +45,7 @@ export type Action =
       scoreboardDate?: string;
       gameId?: number;
     }
+  | { type: "advance_to_today"; today: string }
   | { type: "change_scoreboard_date"; delta: -1 | 1 }
   | { type: "move_selection"; delta: -1 | 1 }
   | { type: "jump_selection"; target: "top" | "bottom" }
@@ -223,7 +224,15 @@ export function appReducer(state: AppState, action: Action): AppState {
         const oldest = cacheKeys.reduce((a, b) =>
           nextStandingsByDate[a]!.lastUpdatedAt < nextStandingsByDate[b]!.lastUpdatedAt ? a : b,
         );
-        delete nextStandingsByDate[oldest];
+        const { [oldest]: _, ...trimmed } = nextStandingsByDate;
+        return {
+          ...state,
+          standingsByDate: trimmed,
+          standingsErrorByDate: {
+            ...state.standingsErrorByDate,
+            [action.scoreboardDate]: undefined,
+          },
+        };
       }
 
       return {
@@ -314,14 +323,16 @@ export function appReducer(state: AppState, action: Action): AppState {
         },
       };
 
-    case "change_scoreboard_date":
-      if (!isScoreboardScreen(state.screen)) {
+    case "advance_to_today":
+      if (state.scoreboardDate === action.today) {
         return state;
       }
 
       return {
         ...state,
-        scoreboardDate: shiftScoreboardDate(state.scoreboardDate, action.delta),
+        screen: { type: "scoreboard" },
+        scoreboardDate: action.today,
+        followingToday: true,
         games: [],
         scoreboardLoadedDate: undefined,
         scoreboardUpdatedAt: undefined,
@@ -330,6 +341,27 @@ export function appReducer(state: AppState, action: Action): AppState {
         activeBanner: undefined,
         bannerQueue: [],
       };
+
+    case "change_scoreboard_date": {
+      if (!isScoreboardScreen(state.screen)) {
+        return state;
+      }
+
+      const newDate = shiftScoreboardDate(state.scoreboardDate, action.delta);
+
+      return {
+        ...state,
+        scoreboardDate: newDate,
+        followingToday: newDate === todayScoreboardDate(),
+        games: [],
+        scoreboardLoadedDate: undefined,
+        scoreboardUpdatedAt: undefined,
+        scoreboardErrorMessage: undefined,
+        selectedGameId: undefined,
+        activeBanner: undefined,
+        bannerQueue: [],
+      };
+    }
 
     case "move_selection":
       return moveSelection(state, action.delta);

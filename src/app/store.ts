@@ -13,6 +13,7 @@ export const initialState: AppState = {
     type: "scoreboard",
   },
   scoreboardDate: todayScoreboardDate(),
+  followingToday: true,
   games: [],
   standingsByDate: {},
   standingsErrorByDate: {},
