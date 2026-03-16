@@ -136,6 +136,7 @@ export function App({ client }: AppProps) {
             game={detailGame ?? selectedGame}
             detail={detail}
             tab={gameScreen?.tab ?? "summary"}
+            pbpPage={gameScreen?.pbpPage ?? 0}
           />
         )}
       </Box>

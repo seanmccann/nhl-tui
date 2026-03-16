@@ -53,6 +53,7 @@ export type Action =
   | { type: "open_leaders" }
   | { type: "go_back" }
   | { type: "set_tab"; tab: DetailTab }
+  | { type: "pbp_page"; delta: -1 | 1 }
   | { type: "manual_refresh_requested" }
   | { type: "dismiss_banner" };
 
@@ -352,6 +353,7 @@ export function appReducer(state: AppState, action: Action): AppState {
           type: "game",
           gameId: state.selectedGameId,
           tab: "summary",
+          pbpPage: 0,
         },
       };
 
@@ -416,8 +418,25 @@ export function appReducer(state: AppState, action: Action): AppState {
         screen: {
           ...state.screen,
           tab: action.tab,
+          pbpPage: 0,
         },
       };
+
+    case "pbp_page": {
+      if (state.screen.type !== "game" || state.screen.tab !== "pbp") {
+        return state;
+      }
+
+      const nextPage = Math.max(0, state.screen.pbpPage + action.delta);
+
+      return {
+        ...state,
+        screen: {
+          ...state.screen,
+          pbpPage: nextPage,
+        },
+      };
+    }
 
     case "manual_refresh_requested": {
       const nextState: AppState = {

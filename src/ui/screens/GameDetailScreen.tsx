@@ -13,6 +13,7 @@ type GameDetailScreenProps = {
   game?: NormalizedGame;
   detail?: NormalizedGameDetail;
   tab: DetailTab;
+  pbpPage: number;
 };
 
 function truncate(value: string, width: number): string {
@@ -92,16 +93,27 @@ function renderSummary(summary: GameSummary | undefined) {
   );
 }
 
-function renderPlayByPlay(pbp: PlayByPlay | undefined) {
+const PBP_PAGE_SIZE = 20;
+
+function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
   if (!pbp) {
     return <Text dimColor>Loading play-by-play...</Text>;
   }
 
-  const plays = pbp.plays.slice(-20).reverse();
+  const reversed = [...pbp.plays].reverse();
+  const totalPages = Math.max(1, Math.ceil(reversed.length / PBP_PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const start = clampedPage * PBP_PAGE_SIZE;
+  const plays = reversed.slice(start, start + PBP_PAGE_SIZE);
 
   return (
     <Box flexDirection="column">
-      <Text bold>Latest Plays</Text>
+      <Text bold>
+        Plays{" "}
+        <Text dimColor>
+          page {clampedPage + 1}/{totalPages}  j/k to page
+        </Text>
+      </Text>
       {plays.length ? (
         plays.map((play) => (
           <Text key={play.id}>
@@ -124,7 +136,7 @@ function renderTeamBox(team: TeamBoxScore) {
         {team.team.abbrev}  {team.team.score}
       </Text>
       <Text dimColor>#  Player           P  G A P +/- S H TOI</Text>
-      {team.skaters.slice(0, 10).map((player) => (
+      {team.skaters.map((player) => (
         <Text key={player.playerId}>
           {String(player.sweaterNumber ?? "").padStart(2)}  {truncate(player.name, 15)} {player.position.padEnd(2)}{" "}
           {String(player.goals).padStart(1)} {String(player.assists).padStart(1)}{" "}
@@ -167,6 +179,7 @@ export function GameDetailScreen({
   game,
   detail,
   tab,
+  pbpPage,
 }: GameDetailScreenProps) {
   const snapshot = detail?.game ?? game;
 
@@ -192,7 +205,7 @@ export function GameDetailScreen({
         <Text color={tab === "box" ? "cyanBright" : undefined}>[3] Box score</Text>
       </Box>
       {tab === "summary" && renderSummary(detail?.summary)}
-      {tab === "pbp" && renderPlayByPlay(detail?.pbp)}
+      {tab === "pbp" && renderPlayByPlay(detail?.pbp, pbpPage)}
       {tab === "box" && renderBoxScore(detail?.box)}
     </Box>
   );

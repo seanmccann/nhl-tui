@@ -125,6 +125,17 @@ export function handleAppInput(
 
     if (input === "3") {
       dispatch({ type: "set_tab", tab: "box" });
+      return;
+    }
+
+    if (input === "j" || key.downArrow) {
+      dispatch({ type: "pbp_page", delta: 1 });
+      return;
+    }
+
+    if (input === "k" || key.upArrow) {
+      dispatch({ type: "pbp_page", delta: -1 });
+      return;
     }
   }
 }

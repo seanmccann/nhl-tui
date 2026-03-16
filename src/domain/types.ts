@@ -16,6 +16,7 @@ export type AppScreen =
       type: "game";
       gameId: number;
       tab: DetailTab;
+      pbpPage: number;
     };
 
 export type Banner = {
