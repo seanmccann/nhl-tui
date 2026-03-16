@@ -111,10 +111,17 @@ export type ThreeStar = {
   statLine: string;
 };
 
+export type PeriodShots = {
+  periodLabel: string;
+  away: number;
+  home: number;
+};
+
 export type GameSummary = {
   scoring: SummaryScoringPeriod[];
   penalties: SummaryPenaltyPeriod[];
   threeStars: ThreeStar[];
+  shotsByPeriod?: PeriodShots[];
 };
 
 export type NormalizedPlay = {
@@ -253,6 +260,7 @@ export type NormalizedGameDetail = {
 export type AppState = {
   screen: AppScreen;
   scoreboardDate: string;
+  followingToday: boolean;
   games: NormalizedGame[];
   standingsByDate: Record<string, NormalizedStandings>;
   standingsErrorByDate: Record<string, string | undefined>;

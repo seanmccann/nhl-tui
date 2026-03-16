@@ -24,13 +24,39 @@ function truncate(value: string, width: number): string {
   return `${value.slice(0, Math.max(0, width - 1))}…`;
 }
 
-function renderSummary(summary: GameSummary | undefined) {
+function renderSummary(
+  summary: GameSummary | undefined,
+  awayAbbrev: string,
+  homeAbbrev: string,
+) {
   if (!summary) {
     return <Text dimColor>Loading summary...</Text>;
   }
 
   return (
     <Box flexDirection="column">
+      {summary.shotsByPeriod && summary.shotsByPeriod.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold>Shots on Goal</Text>
+          <Text dimColor>
+            {"".padEnd(6)}  {awayAbbrev.padEnd(4)} {homeAbbrev.padEnd(4)}
+          </Text>
+          {summary.shotsByPeriod.map((period) => (
+            <Text key={`shots-${period.periodLabel}`}>
+              {period.periodLabel.padEnd(6)}  {String(period.away).padStart(3).padEnd(4)}{" "}
+              {String(period.home).padStart(3).padEnd(4)}
+            </Text>
+          ))}
+          <Text>
+            {"Total".padEnd(6)}  {String(
+              summary.shotsByPeriod.reduce((sum, p) => sum + p.away, 0),
+            ).padStart(3).padEnd(4)}{" "}
+            {String(
+              summary.shotsByPeriod.reduce((sum, p) => sum + p.home, 0),
+            ).padStart(3).padEnd(4)}
+          </Text>
+        </Box>
+      )}
       <Text bold>Scoring</Text>
       {summary.scoring.length ? (
         summary.scoring.map((period) => (
@@ -204,7 +230,7 @@ export function GameDetailScreen({
         <Text>  </Text>
         <Text color={tab === "box" ? "cyanBright" : undefined}>[3] Box score</Text>
       </Box>
-      {tab === "summary" && renderSummary(detail?.summary)}
+      {tab === "summary" && renderSummary(detail?.summary, snapshot.away.abbrev, snapshot.home.abbrev)}
       {tab === "pbp" && renderPlayByPlay(detail?.pbp, pbpPage)}
       {tab === "box" && renderBoxScore(detail?.box)}
     </Box>

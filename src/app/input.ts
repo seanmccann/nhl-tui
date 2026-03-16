@@ -1,5 +1,6 @@
 import type { Key } from "ink";
 import type { Dispatch } from "react";
+import { compareScoreboardDateToToday, todayScoreboardDate } from "./dates.js";
 import type { Action } from "../domain/reducer.js";
 import type { AppState, DetailTab } from "../domain/types.js";
 
@@ -38,6 +39,16 @@ export function handleAppInput(
   }
 
   if (input === "r") {
+    if (state.screen.type === "scoreboard") {
+      const today = todayScoreboardDate();
+      if (
+        state.scoreboardDate !== today &&
+        compareScoreboardDateToToday(state.scoreboardDate) < 0
+      ) {
+        dispatch({ type: "advance_to_today", today });
+        return;
+      }
+    }
     if (state.screen.type !== "standings" && state.screen.type !== "leaders") {
       dispatch({ type: "manual_refresh_requested" });
     }
