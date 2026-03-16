@@ -6,6 +6,9 @@
   "bin": {
     "nhl-tui": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "node --import tsx src/index.tsx",
     "build": "tsc -p tsconfig.json",

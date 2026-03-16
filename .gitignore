@@ -6,6 +6,7 @@ coverage/
 .env.*
 .npmrc
 *.tsbuildinfo
+.claude/
 .DS_Store
 *.log
 npm-debug.log*

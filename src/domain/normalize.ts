@@ -363,9 +363,11 @@ function normalizeThreeStar(
   playerNumbers?: Map<number, number>,
 ): ThreeStar {
   const savePct = toNumber(rawStar.savePctg);
-  const gaa = toNumber(rawStar.goalsAgainstAverage);
+  const goals = toNumber(rawStar.goals);
+  const assists = toNumber(rawStar.assists);
   const goalieStat = savePct ? `SV% ${savePct.toFixed(3)}` : "";
-  const skaterStat = gaa ? `GAA ${gaa.toFixed(2)}` : "";
+  const skaterStat =
+    goals || assists ? `${goals}G ${assists}A ${goals + assists}P` : "";
 
   return {
     star: toNumber(rawStar.star),
