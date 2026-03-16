@@ -14,6 +14,7 @@ import type {
   NormalizedPlay,
   NormalizedStandings,
   NormalizedTeam,
+  PeriodShots,
   PlayByPlay,
   SkaterStatLine,
   StandingsEntry,
@@ -928,10 +929,70 @@ export function normalizeLeaders(
   };
 }
 
+export function computeShotsByPeriod(
+  rawPbpPayload: unknown,
+  awayTeamId: number,
+  homeTeamId: number,
+): PeriodShots[] {
+  const payload = rawPbpPayload as RawRecord;
+  const plays = Array.isArray(payload.plays) ? payload.plays : [];
+
+  if (!awayTeamId || !homeTeamId) {
+    return [];
+  }
+
+  const periodMap = new Map<number, { away: number; home: number; periodLabel: string }>();
+
+  for (const play of plays) {
+    const p = play as RawRecord;
+    const type = p.typeDescKey;
+    if (type !== "shot-on-goal" && type !== "goal") {
+      continue;
+    }
+
+    const periodDescriptor = p.periodDescriptor as RawRecord | undefined;
+    const periodNumber = toNumber(periodDescriptor?.number);
+    const periodType =
+      typeof periodDescriptor?.periodType === "string"
+        ? periodDescriptor.periodType
+        : "REG";
+
+    if (periodType === "SO") {
+      continue;
+    }
+
+    const teamId = toNumber((p.details as RawRecord | undefined)?.eventOwnerTeamId);
+
+    if (!teamId) {
+      continue;
+    }
+
+    if (!periodMap.has(periodNumber)) {
+      periodMap.set(periodNumber, {
+        away: 0,
+        home: 0,
+        periodLabel: formatPeriodLabel(periodNumber, periodType),
+      });
+    }
+
+    const entry = periodMap.get(periodNumber)!;
+    if (teamId === awayTeamId) {
+      entry.away++;
+    } else if (teamId === homeTeamId) {
+      entry.home++;
+    }
+  }
+
+  return Array.from(periodMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, entry]) => entry);
+}
+
 export function normalizeDetail(
   tab: DetailTab,
   rawPayload: unknown,
   now = Date.now(),
+  gameSource?: unknown,
 ): NormalizedGameDetail {
   const payload = rawPayload as RawRecord;
   const summaryPayload =
@@ -939,7 +1000,7 @@ export function normalizeDetail(
   const boxPayload =
     tab === "summary" && payload.box ? (payload.box as RawRecord) : undefined;
   const detail: NormalizedGameDetail = {
-    game: normalizeGame(summaryPayload),
+    game: normalizeGame(gameSource ?? summaryPayload),
     lastUpdatedAt: now,
   };
 
@@ -951,6 +1012,14 @@ export function normalizeDetail(
     );
     if (boxPayload) {
       detail.box = normalizeBoxScore(boxPayload);
+    }
+    if (payload.pbp) {
+      const game = detail.game;
+      detail.summary.shotsByPeriod = computeShotsByPeriod(
+        payload.pbp,
+        game.away.id,
+        game.home.id,
+      );
     }
   }
 

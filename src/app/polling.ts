@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import { NhlApi } from "../api/nhl.js";
-import { compareScoreboardDateToToday } from "./dates.js";
+import { compareScoreboardDateToToday, todayScoreboardDate } from "./dates.js";
 import { diffGame, diffGames } from "../domain/diff.js";
 import { type Action } from "../domain/reducer.js";
 import {
@@ -218,25 +218,33 @@ export function useAppPolling({
     try {
       const receivedAt = Date.now();
       let payload: unknown;
+      let gameSource: unknown;
 
       if (screen.tab === "pbp") {
-        payload = await client.fetchPlayByPlay(screen.gameId);
+        const [landing, pbpData] = await Promise.all([
+          client.fetchSummary(screen.gameId),
+          client.fetchPlayByPlay(screen.gameId),
+        ]);
+        gameSource = landing;
+        payload = pbpData;
       } else if (screen.tab === "box") {
-        payload = await client.fetchBoxScore(screen.gameId);
+        const [landing, boxData] = await Promise.all([
+          client.fetchSummary(screen.gameId),
+          client.fetchBoxScore(screen.gameId),
+        ]);
+        gameSource = landing;
+        payload = boxData;
       } else {
-        const landing = await client.fetchSummary(screen.gameId);
-        let box: unknown | undefined;
-
-        try {
-          box = await client.fetchBoxScore(screen.gameId);
-        } catch {
-          box = undefined;
-        }
-
-        payload = { landing, box };
+        const [landing, box, pbp] = await Promise.all([
+          client.fetchSummary(screen.gameId),
+          client.fetchBoxScore(screen.gameId).catch(() => undefined),
+          client.fetchPlayByPlay(screen.gameId).catch(() => undefined),
+        ]);
+        gameSource = landing;
+        payload = { landing, box, pbp };
       }
 
-      const detail = normalizeDetail(screen.tab, payload, receivedAt);
+      const detail = normalizeDetail(screen.tab, payload, receivedAt, gameSource);
       const previousGame =
         stateRef.current.gameDetails[screen.gameId]?.game ??
         stateRef.current.games.find((game) => game.id === screen.gameId);
@@ -283,6 +291,17 @@ export function useAppPolling({
     let timer: NodeJS.Timeout | undefined;
 
     const loop = async () => {
+      const preState = stateRef.current;
+      const today = todayScoreboardDate();
+      if (
+        preState.followingToday &&
+        preState.screen.type === "scoreboard" &&
+        preState.scoreboardDate !== today
+      ) {
+        dispatch({ type: "advance_to_today", today });
+        return;
+      }
+
       await fetchCurrentView();
       if (disposed) {
         return;
