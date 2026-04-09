@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": false,
   "type": "module",
+  "main": "./dist/index.js",
   "bin": {
     "nhl-tui": "./dist/index.js"
   },
@@ -19,12 +20,12 @@
   },
   "dependencies": {
     "ink": "^6.8.0",
-    "react": "^19.2.4"
+    "react": "^19.2.5"
   },
   "devDependencies": {
-    "@types/node": "^24.6.1",
-    "@types/react": "^19.2.2",
-    "tsx": "^4.20.6",
+    "@types/node": "^24.12.2",
+    "@types/react": "^19.2.14",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "license": "MIT"
