@@ -563,6 +563,31 @@ function normalizePlay(
   };
 }
 
+function areEquivalentPlays(
+  left: NormalizedPlay | undefined,
+  right: NormalizedPlay,
+): boolean {
+  if (!left) {
+    return false;
+  }
+
+  return (
+    left.periodLabel === right.periodLabel &&
+    left.timeInPeriod === right.timeInPeriod &&
+    left.timeRemaining === right.timeRemaining &&
+    left.type === right.type &&
+    left.team === right.team &&
+    left.title === right.title &&
+    left.detail === right.detail &&
+    left.score === right.score &&
+    left.isGoal === right.isGoal
+  );
+}
+
+function dedupeConsecutivePlays(plays: NormalizedPlay[]): NormalizedPlay[] {
+  return plays.filter((play, index) => !areEquivalentPlays(plays[index - 1], play));
+}
+
 function normalizePlayByPlay(rawPayload: RawRecord): PlayByPlay {
   const plays = Array.isArray(rawPayload.plays) ? rawPayload.plays : [];
   const rosterSpots = Array.isArray(rawPayload.rosterSpots)
@@ -589,8 +614,8 @@ function normalizePlayByPlay(rawPayload: RawRecord): PlayByPlay {
   teamById.set(awayTeam.id, awayTeam.abbrev);
   teamById.set(homeTeam.id, homeTeam.abbrev);
 
-  const normalized = plays.map((play) =>
-    normalizePlay(play as RawRecord, playerById, teamById),
+  const normalized = dedupeConsecutivePlays(
+    plays.map((play) => normalizePlay(play as RawRecord, playerById, teamById)),
   );
 
   return {

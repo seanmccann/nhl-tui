@@ -5,6 +5,7 @@ import type {
   GameSummary,
   NormalizedGame,
   NormalizedGameDetail,
+  NormalizedPlay,
   PlayByPlay,
   TeamBoxScore,
 } from "../../domain/types.js";
@@ -121,6 +122,20 @@ function renderSummary(
 
 const PBP_PAGE_SIZE = 20;
 
+function playRowKey(play: NormalizedPlay, index: number): string {
+  return [
+    play.id,
+    play.sortOrder,
+    play.periodLabel,
+    play.timeInPeriod,
+    play.type,
+    play.team ?? "",
+    play.detail ?? "",
+    play.score ?? "",
+    index,
+  ].join(":");
+}
+
 function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
   if (!pbp) {
     return <Text dimColor>Loading play-by-play...</Text>;
@@ -141,8 +156,8 @@ function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
         </Text>
       </Text>
       {plays.length ? (
-        plays.map((play) => (
-          <Text key={play.id}>
+        plays.map((play, index) => (
+          <Text key={playRowKey(play, index)}>
             {play.periodLabel.padEnd(4)} {play.timeInPeriod.padStart(5)}  {(play.team ?? "---").padEnd(3)}{" "}
             {truncate(play.title, 12)}  {truncate(play.detail ?? "", 32)}
             {play.score ? `  ${play.score}` : ""}
