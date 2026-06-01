@@ -7,8 +7,8 @@ Thanks for contributing to `nhl-tui`.
 Run:
 
 ```bash
-npm run check
-npm run build
+pnpm check
+pnpm build
 ```
 
 ## Project Structure

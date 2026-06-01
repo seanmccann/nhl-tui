@@ -61,14 +61,14 @@ The summary view includes scoring, penalties, and three stars. Where the upstrea
 ### Run locally
 
 ```bash
-npm install
-npm start
+pnpm install
+pnpm start
 ```
 
 ### Build the CLI
 
 ```bash
-npm run build
+pnpm build
 node dist/index.js
 ```
 
@@ -190,9 +190,9 @@ Goal events are surfaced through a queued banner system so multiple notification
 Useful commands:
 
 ```bash
-npm start
-npm run check
-npm run build
+pnpm start
+pnpm check
+pnpm build
 ```
 
 ## Contributing
@@ -202,8 +202,8 @@ Issues and pull requests are welcome.
 Before opening a PR, run:
 
 ```bash
-npm run check
-npm run build
+pnpm check
+pnpm build
 ```
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contributor expectations, including trademark and branding restrictions.
