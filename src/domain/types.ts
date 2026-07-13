@@ -19,11 +19,13 @@ export type AppScreen =
       pbpPage: number;
     };
 
+export type BannerKind = "goal" | "game-start" | "period" | "game-end";
+
 export type Banner = {
   id: string;
-  type: "goal";
+  kind: BannerKind;
   gameId: number;
-  team: string;
+  team?: string;
   title: string;
   subtitle?: string;
   createdAt: number;

@@ -1,5 +1,5 @@
 import { shiftScoreboardDate, todayScoreboardDate } from "../app/dates.js";
-import { createGoalBanners } from "./events.js";
+import { createBanners } from "./events.js";
 import type {
   AppEvent,
   AppScreen,
@@ -54,7 +54,7 @@ export type Action =
   | { type: "open_leaders" }
   | { type: "go_back" }
   | { type: "set_tab"; tab: DetailTab }
-  | { type: "pbp_page"; delta: -1 | 1 }
+  | { type: "pbp_page"; delta: -1 | 1; pageSize: number }
   | { type: "manual_refresh_requested" }
   | { type: "dismiss_banner" };
 
@@ -144,7 +144,7 @@ function withEvents(
   events: AppEvent[],
   receivedAt: number,
 ): Pick<AppState, "activeBanner" | "bannerQueue" | "recentEvents"> {
-  const banners = createGoalBanners(events, games, receivedAt);
+  const banners = createBanners(events, games, receivedAt);
   const bannerState = enqueueBanners(state.activeBanner, state.bannerQueue, banners);
 
   return {
@@ -459,7 +459,20 @@ export function appReducer(state: AppState, action: Action): AppState {
         return state;
       }
 
-      const nextPage = Math.max(0, state.screen.pbpPage + action.delta);
+      // Clamp against the actual page count (using the viewport-derived page
+      // size passed from the view) so holding a paging key past the last page
+      // doesn't inflate pbpPage — which would otherwise make the reverse key
+      // feel dead until the accumulated overshoot is unwound.
+      const playCount =
+        state.gameDetails[state.screen.gameId]?.pbp?.plays.length ?? 0;
+      const totalPages = Math.max(
+        1,
+        Math.ceil(playCount / Math.max(1, action.pageSize)),
+      );
+      const nextPage = Math.max(
+        0,
+        Math.min(totalPages - 1, state.screen.pbpPage + action.delta),
+      );
 
       return {
         ...state,
@@ -490,6 +503,23 @@ export function appReducer(state: AppState, action: Action): AppState {
             ...state.gameDetailErrors,
             [state.screen.gameId]: undefined,
           },
+        };
+      }
+
+      if (state.screen.type === "standings") {
+        return {
+          ...nextState,
+          standingsErrorByDate: {
+            ...state.standingsErrorByDate,
+            [state.scoreboardDate]: undefined,
+          },
+        };
+      }
+
+      if (state.screen.type === "leaders") {
+        return {
+          ...nextState,
+          leadersErrorMessage: undefined,
         };
       }
 

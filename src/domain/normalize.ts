@@ -26,6 +26,35 @@ import type {
 
 type RawRecord = Record<string, any>;
 
+/**
+ * Thrown when an API payload is structurally unrecognizable (as opposed to
+ * legitimately empty). Surfacing this instead of returning empty data lets the
+ * polling layer keep the last-known-good view and flag the anomaly, rather than
+ * silently rendering "no games" when the API shape has actually changed.
+ */
+export class NormalizeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NormalizeError";
+  }
+}
+
+function asRecord(value: unknown, context: string): RawRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new NormalizeError(`Unexpected ${context} payload: expected an object`);
+  }
+
+  return value as RawRecord;
+}
+
+function expectArray(value: unknown, context: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new NormalizeError(`Unexpected ${context} payload: expected an array`);
+  }
+
+  return value;
+}
+
 function readName(value: unknown): string {
   if (typeof value === "string") {
     return value;
@@ -295,8 +324,8 @@ function sortGames(left: NormalizedGame, right: NormalizedGame): number {
 }
 
 export function normalizeScoreboard(rawPayload: unknown): NormalizedGame[] {
-  const payload = rawPayload as RawRecord;
-  const games = Array.isArray(payload.games) ? payload.games : [];
+  const payload = asRecord(rawPayload, "scoreboard");
+  const games = expectArray(payload.games, "scoreboard games");
 
   return games.map(normalizeGame).sort(sortGames);
 }
@@ -564,7 +593,7 @@ function normalizePlay(
 }
 
 function normalizePlayByPlay(rawPayload: RawRecord): PlayByPlay {
-  const plays = Array.isArray(rawPayload.plays) ? rawPayload.plays : [];
+  const plays = expectArray(rawPayload.plays, "play-by-play plays");
   const rosterSpots = Array.isArray(rawPayload.rosterSpots)
     ? rawPayload.rosterSpots
     : [];
@@ -678,7 +707,10 @@ function normalizeTeamBoxScore(
 }
 
 function normalizeBoxScore(rawPayload: RawRecord): BoxScore {
-  const playerByGameStats = (rawPayload.playerByGameStats ?? {}) as RawRecord;
+  const playerByGameStats = asRecord(
+    rawPayload.playerByGameStats ?? {},
+    "boxscore playerByGameStats",
+  );
 
   return {
     away: normalizeTeamBoxScore(
@@ -829,8 +861,8 @@ export function normalizeStandings(
   scoreboardDate: string,
   now = Date.now(),
 ): NormalizedStandings {
-  const payload = rawPayload as RawRecord;
-  const standings = Array.isArray(payload.standings) ? payload.standings : [];
+  const payload = asRecord(rawPayload, "standings");
+  const standings = expectArray(payload.standings, "standings");
   const entries = standings.map((standing) =>
     normalizeStandingsEntry(standing as RawRecord),
   );
@@ -898,7 +930,10 @@ function normalizeLeaderTable(
     digits: number;
   },
 ): LeaderTable {
-  const entries = (Array.isArray(rawPayload[meta.key]) ? rawPayload[meta.key] : []) as RawRecord[];
+  const entries = expectArray(
+    rawPayload[meta.key],
+    `leaders ${meta.key}`,
+  ) as RawRecord[];
 
   return {
     key: meta.key,
@@ -917,8 +952,8 @@ export function normalizeLeaders(
   rawGoaliePayload: unknown,
   now = Date.now(),
 ): NormalizedLeaders {
-  const skaterPayload = rawSkaterPayload as RawRecord;
-  const goaliePayload = rawGoaliePayload as RawRecord;
+  const skaterPayload = asRecord(rawSkaterPayload, "skater leaders");
+  const goaliePayload = asRecord(rawGoaliePayload, "goalie leaders");
 
   return {
     skaterTables: SKATER_LEADER_META.map((meta) =>
@@ -996,7 +1031,7 @@ export function normalizeDetail(
   now = Date.now(),
   gameSource?: unknown,
 ): NormalizedGameDetail {
-  const payload = rawPayload as RawRecord;
+  const payload = asRecord(rawPayload, `game ${tab}`);
   const summaryPayload =
     tab === "summary" && payload.landing ? (payload.landing as RawRecord) : payload;
   const boxPayload =

@@ -60,23 +60,31 @@ function diffSingleGame(
     });
   }
 
-  events.push(
-    ...buildGoalEvents(
-      nextGame.id,
-      nextGame.away.abbrev,
-      nextGame.away.score - previousGame.away.score,
-      timestamp,
-    ),
-  );
+  // Only announce goals we observed during live play. A score that jumps
+  // because the previous observation was pre-game or a stale first load
+  // (e.g. waking to a finished game) must update silently — otherwise every
+  // goal of a completed game floods in as a banner. Comparing on the
+  // previous phase (not the next) still lets a game-winning goal that ends
+  // the game in the same poll surface, since that transition is live->final.
+  if (previousGame.phase === "live") {
+    events.push(
+      ...buildGoalEvents(
+        nextGame.id,
+        nextGame.away.abbrev,
+        nextGame.away.score - previousGame.away.score,
+        timestamp,
+      ),
+    );
 
-  events.push(
-    ...buildGoalEvents(
-      nextGame.id,
-      nextGame.home.abbrev,
-      nextGame.home.score - previousGame.home.score,
-      timestamp,
-    ),
-  );
+    events.push(
+      ...buildGoalEvents(
+        nextGame.id,
+        nextGame.home.abbrev,
+        nextGame.home.score - previousGame.home.score,
+        timestamp,
+      ),
+    );
+  }
 
   return events;
 }

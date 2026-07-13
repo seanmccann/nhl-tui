@@ -11,6 +11,14 @@ type StatusLineProps = {
 const MIN_STALE_MS = 10_000;
 const STALE_MULTIPLIER = 2;
 
+function formatClock(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(timestamp);
+}
+
 export function StatusLine({
   updatedAt,
   pollDelayMs,
@@ -63,9 +71,11 @@ export function StatusLine({
     Boolean(updatedAt) && staleAfterMs !== undefined && ageMs >= staleAfterMs;
   const showAuto = !(hideAutoWhenDisabled && pollDelayMs === undefined);
 
-  if (!showAuto && !errorMessage) {
+  if (!showAuto && !errorMessage && !updatedAt) {
     return null;
   }
+
+  const sep = (leading: boolean) => (leading ? "  |  " : "");
 
   return (
     <Box>
@@ -76,8 +86,21 @@ export function StatusLine({
             : `auto ${Math.round(pollDelayMs / 1000)}s`}
         </Text>
       )}
-      {isStale && <Text color="yellow">{`  |  stale ${Math.floor(ageMs / 1000)}s`}</Text>}
-      {errorMessage && <Text color="redBright">{`  |  error ${errorMessage}`}</Text>}
+      {updatedAt && (
+        <Text dimColor>{`${sep(showAuto)}updated ${formatClock(updatedAt)}`}</Text>
+      )}
+      {isStale && (
+        <Text color="yellow">{`${sep(showAuto || Boolean(updatedAt))}stale ${Math.floor(
+          ageMs / 1000,
+        )}s`}</Text>
+      )}
+      {errorMessage && (
+        <Text color="redBright">
+          {`${sep(showAuto || Boolean(updatedAt) || isStale)}${
+            updatedAt ? "retrying — " : ""
+          }error ${errorMessage}`}
+        </Text>
+      )}
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import { NhlApi } from "../api/nhl.js";
+import { NhlApi, isAbortError } from "../api/nhl.js";
 import { compareScoreboardDateToToday, todayScoreboardDate } from "./dates.js";
 import { diffGame, diffGames } from "../domain/diff.js";
 import { type Action } from "../domain/reducer.js";
@@ -98,8 +98,13 @@ export function getDetailPollDelayMs(
   }
 
   if (game.phase === "upcoming") {
+    // Derive the game's hockey (Eastern) date from its start instant so the
+    // near-puck-drop cadence lines up with compareScoreboardDateToToday, which
+    // also works in Eastern time. Slicing the UTC string instead would read as
+    // "tomorrow" for any evening game and wrongly pick the future-date delay.
+    const gameHockeyDate = todayScoreboardDate(new Date(game.startTimeEpochMs));
     return Math.min(
-      getScoreboardPollDelayMs([game], game.startTimeUtc.slice(0, 10), now),
+      getScoreboardPollDelayMs([game], gameHockeyDate, now),
       tab === "pbp" ? 5000 : 8000,
     );
   }
@@ -115,6 +120,19 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+/**
+ * For the summary tab's optional box/pbp fetches: swallow genuine failures
+ * (the tab still renders from the landing payload) but let cancellation
+ * propagate so an aborted request doesn't get treated as a real error.
+ */
+function rethrowAbort(error: unknown): undefined {
+  if (isAbortError(error)) {
+    throw error;
+  }
+
+  return undefined;
+}
+
 export function useAppPolling({
   client,
   dispatch,
@@ -125,12 +143,12 @@ export function useAppPolling({
   screenTab,
   manualRefreshToken,
 }: UseAppPollingOptions): void {
-  const fetchScoreboard = useEffectEvent(async () => {
+  const fetchScoreboard = useEffectEvent(async (signal?: AbortSignal) => {
     const currentScoreboardDate = stateRef.current.scoreboardDate;
 
     try {
       const receivedAt = Date.now();
-      const payload = await client.fetchScoreboard(currentScoreboardDate);
+      const payload = await client.fetchScoreboard(currentScoreboardDate, { signal });
       const games = normalizeScoreboard(payload);
       const previousGames = stateRef.current.games;
       const events = diffGames(previousGames, games, receivedAt);
@@ -143,6 +161,10 @@ export function useAppPolling({
         events,
       });
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       dispatch({
         type: "poll_failed",
         resource: "scoreboard",
@@ -152,16 +174,16 @@ export function useAppPolling({
     }
   });
 
-  const fetchStandings = useEffectEvent(async () => {
+  const fetchStandings = useEffectEvent(async (signal?: AbortSignal, force = false) => {
     const currentScoreboardDate = stateRef.current.scoreboardDate;
 
-    if (stateRef.current.standingsByDate[currentScoreboardDate]) {
+    if (!force && stateRef.current.standingsByDate[currentScoreboardDate]) {
       return;
     }
 
     try {
       const receivedAt = Date.now();
-      const payload = await client.fetchStandings(currentScoreboardDate);
+      const payload = await client.fetchStandings(currentScoreboardDate, { signal });
       const standings = normalizeStandings(payload, currentScoreboardDate, receivedAt);
 
       dispatch({
@@ -171,6 +193,10 @@ export function useAppPolling({
         receivedAt,
       });
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       dispatch({
         type: "poll_failed",
         resource: "standings",
@@ -180,16 +206,16 @@ export function useAppPolling({
     }
   });
 
-  const fetchLeaders = useEffectEvent(async () => {
-    if (stateRef.current.leaders) {
+  const fetchLeaders = useEffectEvent(async (signal?: AbortSignal, force = false) => {
+    if (!force && stateRef.current.leaders) {
       return;
     }
 
     try {
       const receivedAt = Date.now();
       const [skaterPayload, goaliePayload] = await Promise.all([
-        client.fetchSkaterLeaders(10),
-        client.fetchGoalieLeaders(10),
+        client.fetchSkaterLeaders(10, { signal }),
+        client.fetchGoalieLeaders(10, { signal }),
       ]);
       const leaders = normalizeLeaders(skaterPayload, goaliePayload, receivedAt);
 
@@ -199,6 +225,10 @@ export function useAppPolling({
         receivedAt,
       });
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       if (stateRef.current.screen.type === "leaders") {
         dispatch({
           type: "poll_failed",
@@ -209,7 +239,7 @@ export function useAppPolling({
     }
   });
 
-  const fetchDetail = useEffectEvent(async () => {
+  const fetchDetail = useEffectEvent(async (signal?: AbortSignal) => {
     const screen = stateRef.current.screen;
     if (screen.type !== "game") {
       return;
@@ -222,23 +252,23 @@ export function useAppPolling({
 
       if (screen.tab === "pbp") {
         const [landing, pbpData] = await Promise.all([
-          client.fetchSummary(screen.gameId),
-          client.fetchPlayByPlay(screen.gameId),
+          client.fetchSummary(screen.gameId, { signal }),
+          client.fetchPlayByPlay(screen.gameId, { signal }),
         ]);
         gameSource = landing;
         payload = pbpData;
       } else if (screen.tab === "box") {
         const [landing, boxData] = await Promise.all([
-          client.fetchSummary(screen.gameId),
-          client.fetchBoxScore(screen.gameId),
+          client.fetchSummary(screen.gameId, { signal }),
+          client.fetchBoxScore(screen.gameId, { signal }),
         ]);
         gameSource = landing;
         payload = boxData;
       } else {
         const [landing, box, pbp] = await Promise.all([
-          client.fetchSummary(screen.gameId),
-          client.fetchBoxScore(screen.gameId).catch(() => undefined),
-          client.fetchPlayByPlay(screen.gameId).catch(() => undefined),
+          client.fetchSummary(screen.gameId, { signal }),
+          client.fetchBoxScore(screen.gameId, { signal }).catch(rethrowAbort),
+          client.fetchPlayByPlay(screen.gameId, { signal }).catch(rethrowAbort),
         ]);
         gameSource = landing;
         payload = { landing, box, pbp };
@@ -258,6 +288,10 @@ export function useAppPolling({
         events,
       });
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       dispatch({
         type: "poll_failed",
         resource: "game",
@@ -267,28 +301,29 @@ export function useAppPolling({
     }
   });
 
-  const fetchCurrentView = useEffectEvent(async () => {
+  const fetchCurrentView = useEffectEvent(async (signal?: AbortSignal, force = false) => {
     if (stateRef.current.screen.type === "scoreboard") {
-      await fetchScoreboard();
+      await fetchScoreboard(signal);
       return;
     }
 
     if (stateRef.current.screen.type === "standings") {
-      await fetchStandings();
+      await fetchStandings(signal, force);
       return;
     }
 
     if (stateRef.current.screen.type === "leaders") {
-      await fetchLeaders();
+      await fetchLeaders(signal, force);
       return;
     }
 
-    await fetchDetail();
+    await fetchDetail(signal);
   });
 
   useEffect(() => {
     let disposed = false;
     let timer: NodeJS.Timeout | undefined;
+    const controller = new AbortController();
 
     const loop = async () => {
       const preState = stateRef.current;
@@ -302,7 +337,7 @@ export function useAppPolling({
         return;
       }
 
-      await fetchCurrentView();
+      await fetchCurrentView(controller.signal);
       if (disposed) {
         return;
       }
@@ -336,6 +371,7 @@ export function useAppPolling({
 
     return () => {
       disposed = true;
+      controller.abort();
       if (timer) {
         clearTimeout(timer);
       }
@@ -347,6 +383,9 @@ export function useAppPolling({
       return;
     }
 
-    void fetchCurrentView();
+    const controller = new AbortController();
+    void fetchCurrentView(controller.signal, true);
+
+    return () => controller.abort();
   }, [fetchCurrentView, manualRefreshToken]);
 }

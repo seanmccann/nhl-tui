@@ -14,7 +14,20 @@ type GameDetailScreenProps = {
   detail?: NormalizedGameDetail;
   tab: DetailTab;
   pbpPage: number;
+  /** Rows available for the tab body; content is bounded to fit when set. */
+  viewportRows?: number;
 };
+
+const DEFAULT_PBP_PAGE_SIZE = 20;
+
+/**
+ * Play-by-play rows that fit the tab body for a given viewport. Shared with the
+ * input/reducer path so page clamping matches what's actually on screen.
+ */
+export function pbpPageSizeForViewport(viewportRows?: number): number {
+  const bodyRows = viewportRows ? Math.max(4, viewportRows - 4) : undefined;
+  return bodyRows ? Math.max(5, bodyRows - 1) : DEFAULT_PBP_PAGE_SIZE;
+}
 
 function truncate(value: string, width: number): string {
   if (value.length <= width) {
@@ -63,8 +76,8 @@ function renderSummary(
           <Box key={`scoring-${period.periodLabel}`} flexDirection="column">
             <Text dimColor>{period.periodLabel || "Game"}</Text>
             {period.goals.length ? (
-              period.goals.map((goal) => (
-                <Text key={goal.eventId}>
+              period.goals.map((goal, index) => (
+                <Text key={`${goal.eventId}-${index}`}>
                   {goal.timeInPeriod.padStart(5)}  {goal.team.padEnd(3)}  {truncate(goal.scorer, 18)}{" "}
                   {goal.strength.padEnd(3)}  {goal.scoreAfter.padEnd(5)}
                   {goal.assists.length ? `  A: ${goal.assists.join(", ")}` : ""}
@@ -119,18 +132,36 @@ function renderSummary(
   );
 }
 
-const PBP_PAGE_SIZE = 20;
+const PLAY_COLORS: Record<string, string> = {
+  goal: "greenBright",
+  "shot-on-goal": "cyan",
+  "missed-shot": "blue",
+  "blocked-shot": "blue",
+  penalty: "red",
+  hit: "yellow",
+  faceoff: "magenta",
+  giveaway: "redBright",
+  takeaway: "greenBright",
+  stoppage: "gray",
+  "period-start": "white",
+  "period-end": "white",
+  "game-end": "white",
+};
 
-function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
+function colorForPlay(type: string): string | undefined {
+  return PLAY_COLORS[type];
+}
+
+function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number, pageSize: number) {
   if (!pbp) {
     return <Text dimColor>Loading play-by-play...</Text>;
   }
 
   const reversed = [...pbp.plays].reverse();
-  const totalPages = Math.max(1, Math.ceil(reversed.length / PBP_PAGE_SIZE));
-  const clampedPage = Math.min(page, totalPages - 1);
-  const start = clampedPage * PBP_PAGE_SIZE;
-  const plays = reversed.slice(start, start + PBP_PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(reversed.length / pageSize));
+  const clampedPage = Math.max(0, Math.min(page, totalPages - 1));
+  const start = clampedPage * pageSize;
+  const plays = reversed.slice(start, start + pageSize);
 
   return (
     <Box flexDirection="column">
@@ -141,13 +172,23 @@ function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
         </Text>
       </Text>
       {plays.length ? (
-        plays.map((play) => (
-          <Text key={play.id}>
-            {play.periodLabel.padEnd(4)} {play.timeInPeriod.padStart(5)}  {(play.team ?? "---").padEnd(3)}{" "}
-            {truncate(play.title, 12)}  {truncate(play.detail ?? "", 32)}
-            {play.score ? `  ${play.score}` : ""}
-          </Text>
-        ))
+        plays.map((play, index) => {
+          const color = colorForPlay(play.type);
+          return (
+            <Text key={`${play.id}-${index}`}>
+              <Text dimColor>
+                {play.periodLabel.padEnd(4)} {play.timeInPeriod.padStart(5)}{" "}
+              </Text>
+              <Text>{(play.team ?? "---").padEnd(3)} </Text>
+              <Text color={color} bold={play.isGoal}>
+                {truncate(play.title, 12)}
+              </Text>
+              {"  "}
+              <Text>{truncate(play.detail ?? "", 32)}</Text>
+              {play.score ? <Text dimColor>{`  ${play.score}`}</Text> : null}
+            </Text>
+          );
+        })
       ) : (
         <Text dimColor>No plays yet.</Text>
       )}
@@ -155,26 +196,32 @@ function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
   );
 }
 
-function renderTeamBox(team: TeamBoxScore) {
+function renderTeamBox(team: TeamBoxScore, maxSkaters: number) {
+  const shownSkaters = team.skaters.slice(0, Math.max(0, maxSkaters));
+  const hiddenSkaters = team.skaters.length - shownSkaters.length;
+
   return (
     <Box flexDirection="column" flexGrow={1} paddingRight={1}>
       <Text bold>
         {team.team.abbrev}  {team.team.score}
       </Text>
       <Text dimColor>#  Player           P  G A P +/- S H TOI</Text>
-      {team.skaters.map((player) => (
-        <Text key={player.playerId}>
+      {shownSkaters.map((player, index) => (
+        <Text key={`${player.playerId}-${index}`}>
           {String(player.sweaterNumber ?? "").padStart(2)}  {truncate(player.name, 15)} {player.position.padEnd(2)}{" "}
           {String(player.goals).padStart(1)} {String(player.assists).padStart(1)}{" "}
           {String(player.points).padStart(1)} {String(player.plusMinus ?? 0).padStart(3)}{" "}
           {String(player.shots).padStart(1)} {String(player.hits).padStart(1)} {player.toi}
         </Text>
       ))}
+      {hiddenSkaters > 0 && (
+        <Text dimColor>…+{hiddenSkaters} more skaters (enlarge terminal)</Text>
+      )}
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Goalies</Text>
         {team.goalies.length ? (
-          team.goalies.map((goalie) => (
-            <Text key={goalie.playerId}>
+          team.goalies.map((goalie, index) => (
+            <Text key={`${goalie.playerId}-${index}`}>
               {String(goalie.sweaterNumber ?? "").padStart(2)}  {truncate(goalie.name, 15)}  SV{" "}
               {String(goalie.saves).padStart(2)}/{String(goalie.shotsAgainst).padEnd(2)}  SV%{" "}
               {goalie.savePct.toFixed(3)}  TOI {goalie.toi}
@@ -188,15 +235,15 @@ function renderTeamBox(team: TeamBoxScore) {
   );
 }
 
-function renderBoxScore(box: BoxScore | undefined) {
+function renderBoxScore(box: BoxScore | undefined, maxSkaters: number) {
   if (!box) {
     return <Text dimColor>Loading box score...</Text>;
   }
 
   return (
     <Box flexDirection="row">
-      {renderTeamBox(box.away)}
-      {renderTeamBox(box.home)}
+      {renderTeamBox(box.away, maxSkaters)}
+      {renderTeamBox(box.home, maxSkaters)}
     </Box>
   );
 }
@@ -206,12 +253,20 @@ export function GameDetailScreen({
   detail,
   tab,
   pbpPage,
+  viewportRows,
 }: GameDetailScreenProps) {
   const snapshot = detail?.game ?? game;
 
   if (!snapshot) {
     return <Text dimColor>Loading game...</Text>;
   }
+
+  // The game header + tab bar consume ~4 rows above the tab body.
+  const bodyRows = viewportRows ? Math.max(4, viewportRows - 4) : undefined;
+  const pbpPageSize = pbpPageSizeForViewport(viewportRows);
+  // Box score stacks a header, goalies header, and goalie rows under the
+  // skaters, so leave room for those before capping the skater list.
+  const maxSkaters = bodyRows ? Math.max(3, bodyRows - 4) : Number.POSITIVE_INFINITY;
 
   return (
     <Box flexDirection="column">
@@ -231,8 +286,8 @@ export function GameDetailScreen({
         <Text color={tab === "box" ? "cyanBright" : undefined}>[3] Box score</Text>
       </Box>
       {tab === "summary" && renderSummary(detail?.summary, snapshot.away.abbrev, snapshot.home.abbrev)}
-      {tab === "pbp" && renderPlayByPlay(detail?.pbp, pbpPage)}
-      {tab === "box" && renderBoxScore(detail?.box)}
+      {tab === "pbp" && renderPlayByPlay(detail?.pbp, pbpPage, pbpPageSize)}
+      {tab === "box" && renderBoxScore(detail?.box, maxSkaters)}
     </Box>
   );
 }
