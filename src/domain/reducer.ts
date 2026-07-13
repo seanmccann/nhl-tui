@@ -1,5 +1,5 @@
 import { shiftScoreboardDate, todayScoreboardDate } from "../app/dates.js";
-import { createGoalBanners } from "./events.js";
+import { createBanners } from "./events.js";
 import type {
   AppEvent,
   AppScreen,
@@ -144,7 +144,7 @@ function withEvents(
   events: AppEvent[],
   receivedAt: number,
 ): Pick<AppState, "activeBanner" | "bannerQueue" | "recentEvents"> {
-  const banners = createGoalBanners(events, games, receivedAt);
+  const banners = createBanners(events, games, receivedAt);
   const bannerState = enqueueBanners(state.activeBanner, state.bannerQueue, banners);
 
   return {
