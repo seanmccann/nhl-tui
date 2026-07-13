@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { VERSION } from "../meta.js";
 
 const BASE_URL = "https://api-web.nhle.com/v1";
 
@@ -37,19 +36,7 @@ export type RequestOptions = {
   attempts?: number;
 };
 
-function readVersion(): string {
-  try {
-    const pkgUrl = new URL("../../package.json", import.meta.url);
-    const pkg = JSON.parse(readFileSync(fileURLToPath(pkgUrl), "utf8")) as {
-      version?: unknown;
-    };
-    return typeof pkg.version === "string" ? pkg.version : "0.0.0";
-  } catch {
-    return "0.0.0";
-  }
-}
-
-const USER_AGENT = `nhl-tui/${readVersion()}`;
+const USER_AGENT = `nhl-tui/${VERSION}`;
 
 function backoffMs(attempt: number, retryAfterMs?: number): number {
   if (retryAfterMs !== undefined) {

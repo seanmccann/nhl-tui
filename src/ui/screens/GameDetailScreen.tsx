@@ -67,8 +67,8 @@ function renderSummary(
           <Box key={`scoring-${period.periodLabel}`} flexDirection="column">
             <Text dimColor>{period.periodLabel || "Game"}</Text>
             {period.goals.length ? (
-              period.goals.map((goal) => (
-                <Text key={goal.eventId}>
+              period.goals.map((goal, index) => (
+                <Text key={`${goal.eventId}-${index}`}>
                   {goal.timeInPeriod.padStart(5)}  {goal.team.padEnd(3)}  {truncate(goal.scorer, 18)}{" "}
                   {goal.strength.padEnd(3)}  {goal.scoreAfter.padEnd(5)}
                   {goal.assists.length ? `  A: ${goal.assists.join(", ")}` : ""}
@@ -163,10 +163,10 @@ function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number, pageSize: n
         </Text>
       </Text>
       {plays.length ? (
-        plays.map((play) => {
+        plays.map((play, index) => {
           const color = colorForPlay(play.type);
           return (
-            <Text key={play.id}>
+            <Text key={`${play.id}-${index}`}>
               <Text dimColor>
                 {play.periodLabel.padEnd(4)} {play.timeInPeriod.padStart(5)}{" "}
               </Text>
@@ -197,8 +197,8 @@ function renderTeamBox(team: TeamBoxScore, maxSkaters: number) {
         {team.team.abbrev}  {team.team.score}
       </Text>
       <Text dimColor>#  Player           P  G A P +/- S H TOI</Text>
-      {shownSkaters.map((player) => (
-        <Text key={player.playerId}>
+      {shownSkaters.map((player, index) => (
+        <Text key={`${player.playerId}-${index}`}>
           {String(player.sweaterNumber ?? "").padStart(2)}  {truncate(player.name, 15)} {player.position.padEnd(2)}{" "}
           {String(player.goals).padStart(1)} {String(player.assists).padStart(1)}{" "}
           {String(player.points).padStart(1)} {String(player.plusMinus ?? 0).padStart(3)}{" "}
@@ -211,8 +211,8 @@ function renderTeamBox(team: TeamBoxScore, maxSkaters: number) {
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Goalies</Text>
         {team.goalies.length ? (
-          team.goalies.map((goalie) => (
-            <Text key={goalie.playerId}>
+          team.goalies.map((goalie, index) => (
+            <Text key={`${goalie.playerId}-${index}`}>
               {String(goalie.sweaterNumber ?? "").padStart(2)}  {truncate(goalie.name, 15)}  SV{" "}
               {String(goalie.saves).padStart(2)}/{String(goalie.shotsAgainst).padEnd(2)}  SV%{" "}
               {goalie.savePct.toFixed(3)}  TOI {goalie.toi}
