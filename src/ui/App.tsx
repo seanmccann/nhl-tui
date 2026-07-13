@@ -17,8 +17,10 @@ import {
 import { useBannerTimer } from "../app/timers.js";
 import { handleAppInput } from "../app/input.js";
 import { Banner } from "./components/Banner.js";
+import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { Footer } from "./components/Footer.js";
 import { StatusLine } from "./components/StatusLine.js";
+import { useTerminalSize } from "./hooks/useTerminalSize.js";
 import { GameDetailScreen } from "./screens/GameDetailScreen.js";
 import { LeadersScreen } from "./screens/LeadersScreen.js";
 import { ScoreboardScreen } from "./screens/ScoreboardScreen.js";
@@ -30,6 +32,7 @@ type AppProps = {
 
 export function App({ client }: AppProps) {
   const { exit } = useApp();
+  const { rows } = useTerminalSize();
   const [state, dispatch] = useAppStore();
   const stateRef = useRef(state);
 
@@ -100,6 +103,14 @@ export function App({ client }: AppProps) {
     screenErrorMessage = detailErrorMessage;
   }
 
+  // Reserve rows for the fixed chrome (title, banner, status, footer and the
+  // surrounding margins) so scrollable views know how much space is theirs.
+  const chromeRows = 1 + (state.activeBanner ? 2 : 0) + 2 + 1 + 2;
+  const viewportRows = Math.max(6, rows - chromeRows);
+  const resetKey = `${screen.type}:${gameScreen?.tab ?? ""}:${
+    gameScreen?.gameId ?? ""
+  }:${state.manualRefreshToken}`;
+
   return (
     <Box flexDirection="column">
       <Text bold color="cyanBright">
@@ -107,6 +118,7 @@ export function App({ client }: AppProps) {
       </Text>
       <Banner banner={state.activeBanner} />
       <Box marginBottom={1}>
+        <ErrorBoundary resetKey={resetKey}>
         {screen.type === "scoreboard" ? (
           <ScoreboardScreen
             dateLabel={formatScoreboardDateLabel(state.scoreboardDate)}
@@ -137,8 +149,10 @@ export function App({ client }: AppProps) {
             detail={detail}
             tab={gameScreen?.tab ?? "summary"}
             pbpPage={gameScreen?.pbpPage ?? 0}
+            viewportRows={viewportRows}
           />
         )}
+        </ErrorBoundary>
       </Box>
       <StatusLine
         updatedAt={statusUpdatedAt}

@@ -14,7 +14,11 @@ type GameDetailScreenProps = {
   detail?: NormalizedGameDetail;
   tab: DetailTab;
   pbpPage: number;
+  /** Rows available for the tab body; content is bounded to fit when set. */
+  viewportRows?: number;
 };
+
+const DEFAULT_PBP_PAGE_SIZE = 20;
 
 function truncate(value: string, width: number): string {
   if (value.length <= width) {
@@ -119,8 +123,6 @@ function renderSummary(
   );
 }
 
-const PBP_PAGE_SIZE = 20;
-
 const PLAY_COLORS: Record<string, string> = {
   goal: "greenBright",
   "shot-on-goal": "cyan",
@@ -141,16 +143,16 @@ function colorForPlay(type: string): string | undefined {
   return PLAY_COLORS[type];
 }
 
-function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
+function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number, pageSize: number) {
   if (!pbp) {
     return <Text dimColor>Loading play-by-play...</Text>;
   }
 
   const reversed = [...pbp.plays].reverse();
-  const totalPages = Math.max(1, Math.ceil(reversed.length / PBP_PAGE_SIZE));
-  const clampedPage = Math.min(page, totalPages - 1);
-  const start = clampedPage * PBP_PAGE_SIZE;
-  const plays = reversed.slice(start, start + PBP_PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(reversed.length / pageSize));
+  const clampedPage = Math.max(0, Math.min(page, totalPages - 1));
+  const start = clampedPage * pageSize;
+  const plays = reversed.slice(start, start + pageSize);
 
   return (
     <Box flexDirection="column">
@@ -185,14 +187,17 @@ function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
   );
 }
 
-function renderTeamBox(team: TeamBoxScore) {
+function renderTeamBox(team: TeamBoxScore, maxSkaters: number) {
+  const shownSkaters = team.skaters.slice(0, Math.max(0, maxSkaters));
+  const hiddenSkaters = team.skaters.length - shownSkaters.length;
+
   return (
     <Box flexDirection="column" flexGrow={1} paddingRight={1}>
       <Text bold>
         {team.team.abbrev}  {team.team.score}
       </Text>
       <Text dimColor>#  Player           P  G A P +/- S H TOI</Text>
-      {team.skaters.map((player) => (
+      {shownSkaters.map((player) => (
         <Text key={player.playerId}>
           {String(player.sweaterNumber ?? "").padStart(2)}  {truncate(player.name, 15)} {player.position.padEnd(2)}{" "}
           {String(player.goals).padStart(1)} {String(player.assists).padStart(1)}{" "}
@@ -200,6 +205,9 @@ function renderTeamBox(team: TeamBoxScore) {
           {String(player.shots).padStart(1)} {String(player.hits).padStart(1)} {player.toi}
         </Text>
       ))}
+      {hiddenSkaters > 0 && (
+        <Text dimColor>…+{hiddenSkaters} more skaters (enlarge terminal)</Text>
+      )}
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>Goalies</Text>
         {team.goalies.length ? (
@@ -218,15 +226,15 @@ function renderTeamBox(team: TeamBoxScore) {
   );
 }
 
-function renderBoxScore(box: BoxScore | undefined) {
+function renderBoxScore(box: BoxScore | undefined, maxSkaters: number) {
   if (!box) {
     return <Text dimColor>Loading box score...</Text>;
   }
 
   return (
     <Box flexDirection="row">
-      {renderTeamBox(box.away)}
-      {renderTeamBox(box.home)}
+      {renderTeamBox(box.away, maxSkaters)}
+      {renderTeamBox(box.home, maxSkaters)}
     </Box>
   );
 }
@@ -236,12 +244,20 @@ export function GameDetailScreen({
   detail,
   tab,
   pbpPage,
+  viewportRows,
 }: GameDetailScreenProps) {
   const snapshot = detail?.game ?? game;
 
   if (!snapshot) {
     return <Text dimColor>Loading game...</Text>;
   }
+
+  // The game header + tab bar consume ~4 rows above the tab body.
+  const bodyRows = viewportRows ? Math.max(4, viewportRows - 4) : undefined;
+  const pbpPageSize = bodyRows ? Math.max(5, bodyRows - 1) : DEFAULT_PBP_PAGE_SIZE;
+  // Box score stacks a header, goalies header, and goalie rows under the
+  // skaters, so leave room for those before capping the skater list.
+  const maxSkaters = bodyRows ? Math.max(3, bodyRows - 4) : Number.POSITIVE_INFINITY;
 
   return (
     <Box flexDirection="column">
@@ -261,8 +277,8 @@ export function GameDetailScreen({
         <Text color={tab === "box" ? "cyanBright" : undefined}>[3] Box score</Text>
       </Box>
       {tab === "summary" && renderSummary(detail?.summary, snapshot.away.abbrev, snapshot.home.abbrev)}
-      {tab === "pbp" && renderPlayByPlay(detail?.pbp, pbpPage)}
-      {tab === "box" && renderBoxScore(detail?.box)}
+      {tab === "pbp" && renderPlayByPlay(detail?.pbp, pbpPage, pbpPageSize)}
+      {tab === "box" && renderBoxScore(detail?.box, maxSkaters)}
     </Box>
   );
 }
