@@ -20,6 +20,7 @@ export function handleAppInput(
   state: AppState,
   dispatch: Dispatch<Action>,
   quit: () => void,
+  pbpPageSize: number,
 ): void {
   if (state.screen.type === "standings" || state.screen.type === "leaders") {
     if (key.escape) {
@@ -49,9 +50,7 @@ export function handleAppInput(
         return;
       }
     }
-    if (state.screen.type !== "standings" && state.screen.type !== "leaders") {
-      dispatch({ type: "manual_refresh_requested" });
-    }
+    dispatch({ type: "manual_refresh_requested" });
     return;
   }
 
@@ -140,12 +139,12 @@ export function handleAppInput(
     }
 
     if (input === "j" || key.downArrow) {
-      dispatch({ type: "pbp_page", delta: 1 });
+      dispatch({ type: "pbp_page", delta: 1, pageSize: pbpPageSize });
       return;
     }
 
     if (input === "k" || key.upArrow) {
-      dispatch({ type: "pbp_page", delta: -1 });
+      dispatch({ type: "pbp_page", delta: -1, pageSize: pbpPageSize });
       return;
     }
   }

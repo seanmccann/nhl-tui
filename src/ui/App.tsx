@@ -21,7 +21,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { Footer } from "./components/Footer.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { useTerminalSize } from "./hooks/useTerminalSize.js";
-import { GameDetailScreen } from "./screens/GameDetailScreen.js";
+import { GameDetailScreen, pbpPageSizeForViewport } from "./screens/GameDetailScreen.js";
 import { LeadersScreen } from "./screens/LeadersScreen.js";
 import { ScoreboardScreen } from "./screens/ScoreboardScreen.js";
 import { StandingsScreen } from "./screens/StandingsScreen.js";
@@ -56,7 +56,7 @@ export function App({ client }: AppProps) {
   });
 
   useInput((input, key) => {
-    handleAppInput(input, key, stateRef.current, dispatch, exit);
+    handleAppInput(input, key, stateRef.current, dispatch, exit, pbpPageSize);
   });
 
   const screen = state.screen;
@@ -107,6 +107,7 @@ export function App({ client }: AppProps) {
   // surrounding margins) so scrollable views know how much space is theirs.
   const chromeRows = 1 + (state.activeBanner ? 2 : 0) + 2 + 1 + 2;
   const viewportRows = Math.max(6, rows - chromeRows);
+  const pbpPageSize = pbpPageSizeForViewport(viewportRows);
   const resetKey = `${screen.type}:${gameScreen?.tab ?? ""}:${
     gameScreen?.gameId ?? ""
   }:${state.manualRefreshToken}`;

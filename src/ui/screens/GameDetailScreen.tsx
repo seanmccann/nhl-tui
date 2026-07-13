@@ -20,6 +20,15 @@ type GameDetailScreenProps = {
 
 const DEFAULT_PBP_PAGE_SIZE = 20;
 
+/**
+ * Play-by-play rows that fit the tab body for a given viewport. Shared with the
+ * input/reducer path so page clamping matches what's actually on screen.
+ */
+export function pbpPageSizeForViewport(viewportRows?: number): number {
+  const bodyRows = viewportRows ? Math.max(4, viewportRows - 4) : undefined;
+  return bodyRows ? Math.max(5, bodyRows - 1) : DEFAULT_PBP_PAGE_SIZE;
+}
+
 function truncate(value: string, width: number): string {
   if (value.length <= width) {
     return value.padEnd(width);
@@ -254,7 +263,7 @@ export function GameDetailScreen({
 
   // The game header + tab bar consume ~4 rows above the tab body.
   const bodyRows = viewportRows ? Math.max(4, viewportRows - 4) : undefined;
-  const pbpPageSize = bodyRows ? Math.max(5, bodyRows - 1) : DEFAULT_PBP_PAGE_SIZE;
+  const pbpPageSize = pbpPageSizeForViewport(viewportRows);
   // Box score stacks a header, goalies header, and goalie rows under the
   // skaters, so leave room for those before capping the skater list.
   const maxSkaters = bodyRows ? Math.max(3, bodyRows - 4) : Number.POSITIVE_INFINITY;

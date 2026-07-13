@@ -98,8 +98,13 @@ export function getDetailPollDelayMs(
   }
 
   if (game.phase === "upcoming") {
+    // Derive the game's hockey (Eastern) date from its start instant so the
+    // near-puck-drop cadence lines up with compareScoreboardDateToToday, which
+    // also works in Eastern time. Slicing the UTC string instead would read as
+    // "tomorrow" for any evening game and wrongly pick the future-date delay.
+    const gameHockeyDate = todayScoreboardDate(new Date(game.startTimeEpochMs));
     return Math.min(
-      getScoreboardPollDelayMs([game], game.startTimeUtc.slice(0, 10), now),
+      getScoreboardPollDelayMs([game], gameHockeyDate, now),
       tab === "pbp" ? 5000 : 8000,
     );
   }
@@ -169,10 +174,10 @@ export function useAppPolling({
     }
   });
 
-  const fetchStandings = useEffectEvent(async (signal?: AbortSignal) => {
+  const fetchStandings = useEffectEvent(async (signal?: AbortSignal, force = false) => {
     const currentScoreboardDate = stateRef.current.scoreboardDate;
 
-    if (stateRef.current.standingsByDate[currentScoreboardDate]) {
+    if (!force && stateRef.current.standingsByDate[currentScoreboardDate]) {
       return;
     }
 
@@ -201,8 +206,8 @@ export function useAppPolling({
     }
   });
 
-  const fetchLeaders = useEffectEvent(async (signal?: AbortSignal) => {
-    if (stateRef.current.leaders) {
+  const fetchLeaders = useEffectEvent(async (signal?: AbortSignal, force = false) => {
+    if (!force && stateRef.current.leaders) {
       return;
     }
 
@@ -296,19 +301,19 @@ export function useAppPolling({
     }
   });
 
-  const fetchCurrentView = useEffectEvent(async (signal?: AbortSignal) => {
+  const fetchCurrentView = useEffectEvent(async (signal?: AbortSignal, force = false) => {
     if (stateRef.current.screen.type === "scoreboard") {
       await fetchScoreboard(signal);
       return;
     }
 
     if (stateRef.current.screen.type === "standings") {
-      await fetchStandings(signal);
+      await fetchStandings(signal, force);
       return;
     }
 
     if (stateRef.current.screen.type === "leaders") {
-      await fetchLeaders(signal);
+      await fetchLeaders(signal, force);
       return;
     }
 
@@ -379,7 +384,7 @@ export function useAppPolling({
     }
 
     const controller = new AbortController();
-    void fetchCurrentView(controller.signal);
+    void fetchCurrentView(controller.signal, true);
 
     return () => controller.abort();
   }, [fetchCurrentView, manualRefreshToken]);
