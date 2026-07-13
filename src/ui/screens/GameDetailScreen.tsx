@@ -121,6 +121,26 @@ function renderSummary(
 
 const PBP_PAGE_SIZE = 20;
 
+const PLAY_COLORS: Record<string, string> = {
+  goal: "greenBright",
+  "shot-on-goal": "cyan",
+  "missed-shot": "blue",
+  "blocked-shot": "blue",
+  penalty: "red",
+  hit: "yellow",
+  faceoff: "magenta",
+  giveaway: "redBright",
+  takeaway: "greenBright",
+  stoppage: "gray",
+  "period-start": "white",
+  "period-end": "white",
+  "game-end": "white",
+};
+
+function colorForPlay(type: string): string | undefined {
+  return PLAY_COLORS[type];
+}
+
 function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
   if (!pbp) {
     return <Text dimColor>Loading play-by-play...</Text>;
@@ -141,13 +161,23 @@ function renderPlayByPlay(pbp: PlayByPlay | undefined, page: number) {
         </Text>
       </Text>
       {plays.length ? (
-        plays.map((play) => (
-          <Text key={play.id}>
-            {play.periodLabel.padEnd(4)} {play.timeInPeriod.padStart(5)}  {(play.team ?? "---").padEnd(3)}{" "}
-            {truncate(play.title, 12)}  {truncate(play.detail ?? "", 32)}
-            {play.score ? `  ${play.score}` : ""}
-          </Text>
-        ))
+        plays.map((play) => {
+          const color = colorForPlay(play.type);
+          return (
+            <Text key={play.id}>
+              <Text dimColor>
+                {play.periodLabel.padEnd(4)} {play.timeInPeriod.padStart(5)}{" "}
+              </Text>
+              <Text>{(play.team ?? "---").padEnd(3)} </Text>
+              <Text color={color} bold={play.isGoal}>
+                {truncate(play.title, 12)}
+              </Text>
+              {"  "}
+              <Text>{truncate(play.detail ?? "", 32)}</Text>
+              {play.score ? <Text dimColor>{`  ${play.score}`}</Text> : null}
+            </Text>
+          );
+        })
       ) : (
         <Text dimColor>No plays yet.</Text>
       )}
